@@ -14,6 +14,8 @@ public class Slot {
 
 	private Fragment fragment;
 
+	private String mimeType;
+
 	private final Listeners<SlotListener> slotListeners = new Listeners<SlotListener>();
 
 	private final Map<SlotStorageListener, SlotStorageListener> storageListeners
@@ -51,6 +53,16 @@ public class Slot {
 			throw new IllegalArgumentException("Cannot put fragment into slot '" + key
 					+ "', as it belongs to slot '" + fragment.getSlot().getKey() + "'");
 		this.fragment = fragment;
+	}
+
+	public String getMimeType() {
+		return mimeType;
+	}
+
+	public void setMimeType(String mimeType) {
+		if(mimeType != null && mimeType.length() == 0)
+			mimeType = null;
+		this.mimeType = mimeType;
 	}
 
 	public void addSlotListener(SlotListener listener) {
