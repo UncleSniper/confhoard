@@ -9,6 +9,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.LinkedList;
 import java.util.Collections;
+import org.unclesniper.confhoard.core.util.HoardSink;
+import org.unclesniper.confhoard.core.security.SlotAction;
+import org.unclesniper.confhoard.core.security.Credentials;
 
 public class ConfState {
 
@@ -98,7 +101,8 @@ public class ConfState {
 		return storage;
 	}
 
-	public Fragment updateSlot(String key, InputStream content) throws IOException, ConfHoardException {
+	public Fragment updateSlot(String key, InputStream content, Credentials credentials)
+			throws IOException, ConfHoardException {
 		if(key == null)
 			throw new IllegalArgumentException("Slot key cannot be null");
 		Slot slot;
@@ -107,6 +111,8 @@ public class ConfState {
 		}
 		if(slot == null)
 			throw new NoSuchSlotException(key);
+		if(!slot.mayPerformAction(SlotAction.UPDATE, credentials))
+			throw new SlotAccessForbiddenException(slot, SlotAction.UPDATE);
 		Fragment newFragment = getLoadedStorage().newFragment(slot, content);
 		Fragment oldFragment = slot.getFragment();
 		List<SlotListener> fired = new LinkedList<SlotListener>();
@@ -157,6 +163,30 @@ public class ConfState {
 		if(cause != null)
 			multi.addSlotUpdateIssue(new TextSlotUpdateIssue(cause));
 		throw new SlotUpdateFailedException(slot, multi, rollback);
+	}
+
+	public void retrieveSlot(String key, Credentials credentials, HoardSink<InputStream> sink)
+			throws IOException, ConfHoardException {
+		if(key == null)
+			throw new IllegalArgumentException("Slot key cannot be null");
+		if(sink == null)
+			throw new IllegalArgumentException("Sink cannot be null");
+		Slot slot;
+		synchronized(slots) {
+			slot = slots.get(key);
+		}
+		if(slot == null)
+			throw new NoSuchSlotException(key);
+		if(!slot.mayPerformAction(SlotAction.RETRIEVE, credentials))
+			throw new SlotAccessForbiddenException(slot, SlotAction.RETRIEVE);
+		Fragment fragment = slot.getFragment();
+		if(fragment == null)
+			sink.accept(null);
+		else {
+			try(InputStream is = fragment.retrieve()) {
+				sink.accept(is);
+			}
+		}
 	}
 
 }

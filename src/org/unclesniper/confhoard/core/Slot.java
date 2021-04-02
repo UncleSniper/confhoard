@@ -5,6 +5,9 @@ import java.io.IOException;
 import java.util.IdentityHashMap;
 import java.util.function.Consumer;
 import org.unclesniper.confhoard.core.util.Listeners;
+import org.unclesniper.confhoard.core.security.SlotAction;
+import org.unclesniper.confhoard.core.security.Credentials;
+import org.unclesniper.confhoard.core.security.SlotSecurityConstraint;
 
 public class Slot {
 
@@ -20,6 +23,9 @@ public class Slot {
 
 	private final Map<SlotStorageListener, SlotStorageListener> storageListeners
 			= new IdentityHashMap<SlotStorageListener, SlotStorageListener>();
+
+	private final Map<SlotSecurityConstraint, SlotSecurityConstraint> securityConstraints
+			= new IdentityHashMap<SlotSecurityConstraint, SlotSecurityConstraint>();
 
 	public Slot(String key) {
 		if(key == null)
@@ -104,6 +110,30 @@ public class Slot {
 			for(SlotStorageListener listener : storageListeners.keySet())
 				listener.saveSlot();
 		}
+	}
+
+	public void addSecurityConstraint(SlotSecurityConstraint constraint) {
+		if(constraint == null)
+			return;
+		synchronized(securityConstraints) {
+			securityConstraints.put(constraint, constraint);
+		}
+	}
+
+	public boolean removeSecurityConstraint(SlotSecurityConstraint constraint) {
+		synchronized(securityConstraints) {
+			return securityConstraints.remove(constraint) != null;
+		}
+	}
+
+	public boolean mayPerformAction(SlotAction action, Credentials credentials) {
+		synchronized(securityConstraints) {
+			for(SlotSecurityConstraint constraint : securityConstraints.keySet()) {
+				if(constraint.mayPerform(this, action, credentials))
+					return true;
+			}
+		}
+		return false;
 	}
 
 }
