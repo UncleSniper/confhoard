@@ -4,6 +4,7 @@ import java.util.List;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.function.Consumer;
+import java.util.function.BooleanSupplier;
 import org.unclesniper.confhoard.core.ConfHoardException;
 
 public class Listeners<ListenerT> {
@@ -46,7 +47,7 @@ public class Listeners<ListenerT> {
 		return true;
 	}
 
-	public void ioFire(IOFire<ListenerT> fire, Consumer<ListenerT> fired) throws IOException {
+	public void ioFire(IOFire<ListenerT> fire, Consumer<ListenerT> fired, BooleanSupplier stop) throws IOException {
 		List<ListenerT> c = cache;
 		if(c == null) {
 			synchronized(listeners) {
@@ -57,13 +58,16 @@ public class Listeners<ListenerT> {
 			}
 		}
 		for(ListenerT listener : c) {
+			if(stop != null && stop.getAsBoolean())
+				break;
 			fire.fire(listener);
 			if(fired != null)
 				fired.accept(listener);
 		}
 	}
 
-	public void confFire(ConfFire<ListenerT> fire, Consumer<ListenerT> fired) throws IOException, ConfHoardException {
+	public void confFire(ConfFire<ListenerT> fire, Consumer<ListenerT> fired, BooleanSupplier stop)
+			throws IOException, ConfHoardException {
 		List<ListenerT> c = cache;
 		if(c == null) {
 			synchronized(listeners) {
@@ -74,6 +78,8 @@ public class Listeners<ListenerT> {
 			}
 		}
 		for(ListenerT listener : c) {
+			if(stop != null && stop.getAsBoolean())
+				break;
 			fire.fire(listener);
 			if(fired != null)
 				fired.accept(listener);

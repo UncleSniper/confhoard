@@ -27,6 +27,8 @@ public class Slot {
 	private final Map<SlotSecurityConstraint, SlotSecurityConstraint> securityConstraints
 			= new IdentityHashMap<SlotSecurityConstraint, SlotSecurityConstraint>();
 
+	private boolean skipOnRollback = true;
+
 	public Slot(String key) {
 		if(key == null)
 			throw new IllegalArgumentException("Slot key cannot be null");
@@ -71,6 +73,14 @@ public class Slot {
 		this.mimeType = mimeType;
 	}
 
+	public boolean isSkipOnRollback() {
+		return skipOnRollback;
+	}
+
+	public void setSkipOnRollback(boolean skipOnRollback) {
+		this.skipOnRollback = skipOnRollback;
+	}
+
 	public void addSlotListener(SlotListener listener) {
 		slotListeners.addListener(listener);
 	}
@@ -81,12 +91,13 @@ public class Slot {
 
 	void fireSlotLoaded(SlotListener.SlotLoadedEvent event, Consumer<SlotListener> fired)
 			throws IOException, ConfHoardException {
-		slotListeners.confFire(listener -> listener.slotLoaded(event), fired);
+		slotListeners.confFire(listener -> listener.slotLoaded(event), fired, null);
 	}
 
 	void fireSlotUpdated(SlotListener.SlotUpdatedEvent event, Consumer<SlotListener> fired)
 			throws IOException, ConfHoardException {
-		slotListeners.confFire(listener -> listener.slotUpdated(event), fired);
+		slotListeners.confFire(listener -> listener.slotUpdated(event), fired,
+				skipOnRollback ? event::shouldRollback : null);
 	}
 
 	public void addStorageListener(SlotStorageListener listener) {
