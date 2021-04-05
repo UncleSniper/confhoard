@@ -9,12 +9,13 @@ import java.util.HashSet;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.LinkedList;
+import java.util.Collection;
 import java.util.Collections;
 import org.unclesniper.confhoard.core.util.HoardSink;
 import org.unclesniper.confhoard.core.security.SlotAction;
 import org.unclesniper.confhoard.core.security.Credentials;
 
-public class ConfState {
+public class ConfState implements ConfStateBinding {
 
 	public static final String DEFAULT_HASH_ALGORITHM = "SHA-256";
 
@@ -65,14 +66,46 @@ public class ConfState {
 		this.hashAlgorithm = hashAlgorithm;
 	}
 
+	public Storage getLoadedStorage(ConfStateBinding outerState) throws IOException, ConfHoardException {
+		if(storage == null)
+			throw new IllegalStateException("No storage backend is configured");
+		if(!fragmentsLoaded) {
+			Set<Slot> loadedSlots = new HashSet<Slot>();
+			storage.loadFragments(slots::get, loadedSlots::add, hashAlgorithm);
+			fragmentsLoaded = true;
+			for(Slot slot : loadedSlots)
+				slot.fireSlotLoaded(new SlotListener.SlotLoadedEvent(slot,
+						outerState == null ? this : outerState), null);
+		}
+		return storage;
+	}
+
+	@Override
+	public ConfState getConfState() {
+		return this;
+	}
+
+	@Override
+	public void setConfState(ConfState confState) {
+		throw new IllegalStateException("Cannot replace configuration state in itself");
+	}
+
+	@Override
 	public Set<String> getSlotKeys() {
 		return Collections.unmodifiableSet(slots.keySet());
 	}
 
+	@Override
+	public Collection<Slot> getSlots() {
+		return Collections.unmodifiableCollection(slots.values());
+	}
+
+	@Override
 	public Slot getSlot(String key) {
 		return slots.get(key);
 	}
 
+	@Override
 	public void addSlot(Slot slot) {
 		if(slot == null)
 			throw new IllegalArgumentException("Slot cannot be null");
@@ -88,6 +121,7 @@ public class ConfState {
 		}
 	}
 
+	@Override
 	public boolean removeSlot(Slot slot) {
 		if(slot == null)
 			return false;
@@ -103,20 +137,8 @@ public class ConfState {
 		return true;
 	}
 
-	public Storage getLoadedStorage() throws IOException, ConfHoardException {
-		if(storage == null)
-			throw new IllegalStateException("No storage backend is configured");
-		if(!fragmentsLoaded) {
-			Set<Slot> loadedSlots = new HashSet<Slot>();
-			storage.loadFragments(slots::get, loadedSlots::add, hashAlgorithm);
-			fragmentsLoaded = true;
-			for(Slot slot : loadedSlots)
-				slot.fireSlotLoaded(new SlotListener.SlotLoadedEvent(slot), null);
-		}
-		return storage;
-	}
-
-	public Fragment updateSlot(String key, InputStream content, Credentials credentials)
+	@Override
+	public Fragment updateSlot(String key, InputStream content, Credentials credentials, ConfStateBinding outerState)
 			throws IOException, ConfHoardException {
 		if(key == null)
 			throw new IllegalArgumentException("Slot key cannot be null");
@@ -128,14 +150,15 @@ public class ConfState {
 			throw new NoSuchSlotException(key);
 		if(!slot.mayPerformAction(SlotAction.UPDATE, credentials))
 			throw new SlotAccessForbiddenException(slot, SlotAction.UPDATE);
-		Fragment newFragment = getLoadedStorage().newFragment(slot, content, hashAlgorithm);
+		Fragment newFragment = getLoadedStorage(outerState).newFragment(slot, content, hashAlgorithm);
 		Fragment oldFragment = slot.getFragment();
 		if(oldFragment != null && Arrays.equals(oldFragment.getHash(), newFragment.getHash())) {
 			newFragment.remove();
 			return null;
 		}
 		List<SlotListener> fired = new LinkedList<SlotListener>();
-		SlotListener.SlotUpdatedEvent event = new SlotListener.SlotUpdatedEvent(slot, oldFragment);
+		SlotListener.SlotUpdatedEvent event = new SlotListener.SlotUpdatedEvent(slot,
+				outerState == null ? this : outerState, oldFragment);
 		slot.setFragment(newFragment);
 		try {
 			slot.fireSlotUpdated(event, fired::add);
@@ -154,7 +177,8 @@ public class ConfState {
 		Fragment newFragment = slot.getFragment();
 		slot.setFragment(oldFragment);
 		if(event.shouldRollback()) {
-			SlotListener.SlotUpdatedEvent rollbackEvent = new SlotListener.SlotUpdatedEvent(slot, newFragment);
+			SlotListener.SlotUpdatedEvent rollbackEvent = new SlotListener.SlotUpdatedEvent(slot,
+					event.getConfState(), newFragment);
 			try {
 				for(SlotListener listener : fired)
 					listener.slotUpdated(rollbackEvent);
@@ -184,8 +208,9 @@ public class ConfState {
 		throw new SlotUpdateFailedException(slot, multi, rollback);
 	}
 
-	public void retrieveSlot(String key, Credentials credentials, HoardSink<InputStream> sink)
-			throws IOException, ConfHoardException {
+	@Override
+	public void retrieveSlot(String key, Credentials credentials, ConfStateBinding outerState,
+			HoardSink<InputStream> sink) throws IOException, ConfHoardException {
 		if(key == null)
 			throw new IllegalArgumentException("Slot key cannot be null");
 		if(sink == null)
@@ -202,7 +227,7 @@ public class ConfState {
 		if(fragment == null)
 			sink.accept(null);
 		else {
-			try(InputStream is = fragment.retrieve()) {
+			try(InputStream is = fragment.retrieve(outerState == null ? this : outerState)) {
 				sink.accept(is);
 			}
 		}

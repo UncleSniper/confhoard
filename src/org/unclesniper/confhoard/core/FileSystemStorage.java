@@ -57,7 +57,7 @@ public class FileSystemStorage implements Storage {
 		}
 
 		@Override
-		public InputStream retrieve() throws IOException {
+		public InputStream retrieve(ConfStateBinding state) throws IOException {
 			return new FileInputStream(new File(directory, id + ".frag"));
 		}
 

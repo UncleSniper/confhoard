@@ -7,7 +7,7 @@ public interface Fragment {
 
 	Slot getSlot();
 
-	InputStream retrieve() throws IOException;
+	InputStream retrieve(ConfStateBinding state) throws IOException;
 
 	void remove() throws IOException;
 

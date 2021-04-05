@@ -10,20 +10,27 @@ public interface SlotListener {
 
 		private final Slot slot;
 
-		public SlotEvent(Slot slot) {
+		private final ConfStateBinding confState;
+
+		public SlotEvent(Slot slot, ConfStateBinding confState) {
 			this.slot = slot;
+			this.confState = confState;
 		}
 
 		public Slot getSlot() {
 			return slot;
 		}
 
+		public ConfStateBinding getConfState() {
+			return confState;
+		}
+
 	}
 
 	public class SlotLoadedEvent extends SlotEvent {
 
-		public SlotLoadedEvent(Slot slot) {
-			super(slot);
+		public SlotLoadedEvent(Slot slot, ConfStateBinding confState) {
+			super(slot, confState);
 		}
 
 	}
@@ -36,8 +43,8 @@ public interface SlotListener {
 
 		private boolean rollbackUpdate;
 
-		public SlotUpdatedEvent(Slot slot, Fragment previousFragment) {
-			super(slot);
+		public SlotUpdatedEvent(Slot slot, ConfStateBinding confState, Fragment previousFragment) {
+			super(slot, confState);
 			this.previousFragment = previousFragment;
 		}
 
