@@ -4,6 +4,7 @@ import java.util.Set;
 import java.io.InputStream;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.function.Function;
 import org.unclesniper.confhoard.core.util.HoardSink;
 import org.unclesniper.confhoard.core.security.Credentials;
 
@@ -57,14 +58,16 @@ public class ConfManagementState implements ConfStateBinding {
 
 	@Override
 	public Fragment updateSlot(String key, InputStream content, Credentials credentials,
-			ConfStateBinding outerState) throws IOException, ConfHoardException {
-		return confState.updateSlot(key, content, credentials, outerState == null ? this : outerState);
+			ConfStateBinding outerState, Function<String, Object> parameters)
+			throws IOException, ConfHoardException {
+		return confState.updateSlot(key, content, credentials, outerState == null ? this : outerState, parameters);
 	}
 
 	@Override
 	public void retrieveSlot(String key, Credentials credentials, ConfStateBinding outerState,
-			HoardSink<InputStream> sink) throws IOException, ConfHoardException {
-		confState.retrieveSlot(key, credentials, outerState == null ? this : outerState, sink);
+			Function<String, Object> parameters, HoardSink<InputStream> sink)
+			throws IOException, ConfHoardException {
+		confState.retrieveSlot(key, credentials, outerState == null ? this : outerState, parameters, sink);
 	}
 
 }

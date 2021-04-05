@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.util.LinkedList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.function.Function;
 import org.unclesniper.confhoard.core.util.HoardSink;
 import org.unclesniper.confhoard.core.security.SlotAction;
 import org.unclesniper.confhoard.core.security.Credentials;
@@ -138,7 +139,8 @@ public class ConfState implements ConfStateBinding {
 	}
 
 	@Override
-	public Fragment updateSlot(String key, InputStream content, Credentials credentials, ConfStateBinding outerState)
+	public Fragment updateSlot(String key, InputStream content, Credentials credentials,
+			ConfStateBinding outerState, Function<String, Object> parameters)
 			throws IOException, ConfHoardException {
 		if(key == null)
 			throw new IllegalArgumentException("Slot key cannot be null");
@@ -158,7 +160,7 @@ public class ConfState implements ConfStateBinding {
 		}
 		List<SlotListener> fired = new LinkedList<SlotListener>();
 		SlotListener.SlotUpdatedEvent event = new SlotListener.SlotUpdatedEvent(slot,
-				outerState == null ? this : outerState, oldFragment);
+				outerState == null ? this : outerState, oldFragment, parameters);
 		slot.setFragment(newFragment);
 		try {
 			slot.fireSlotUpdated(event, fired::add);
@@ -178,7 +180,7 @@ public class ConfState implements ConfStateBinding {
 		slot.setFragment(oldFragment);
 		if(event.shouldRollback()) {
 			SlotListener.SlotUpdatedEvent rollbackEvent = new SlotListener.SlotUpdatedEvent(slot,
-					event.getConfState(), newFragment);
+					event.getConfState(), newFragment, null);
 			try {
 				for(SlotListener listener : fired)
 					listener.slotUpdated(rollbackEvent);
@@ -210,7 +212,8 @@ public class ConfState implements ConfStateBinding {
 
 	@Override
 	public void retrieveSlot(String key, Credentials credentials, ConfStateBinding outerState,
-			HoardSink<InputStream> sink) throws IOException, ConfHoardException {
+			Function<String, Object> parameters, HoardSink<InputStream> sink)
+			throws IOException, ConfHoardException {
 		if(key == null)
 			throw new IllegalArgumentException("Slot key cannot be null");
 		if(sink == null)
@@ -227,7 +230,7 @@ public class ConfState implements ConfStateBinding {
 		if(fragment == null)
 			sink.accept(null);
 		else {
-			try(InputStream is = fragment.retrieve(outerState == null ? this : outerState)) {
+			try(InputStream is = fragment.retrieve(outerState == null ? this : outerState, parameters)) {
 				sink.accept(is);
 			}
 		}

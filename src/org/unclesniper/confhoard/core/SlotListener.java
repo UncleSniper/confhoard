@@ -3,6 +3,7 @@ package org.unclesniper.confhoard.core;
 import java.util.List;
 import java.io.IOException;
 import java.util.LinkedList;
+import java.util.function.Function;
 
 public interface SlotListener {
 
@@ -43,9 +44,13 @@ public interface SlotListener {
 
 		private boolean rollbackUpdate;
 
-		public SlotUpdatedEvent(Slot slot, ConfStateBinding confState, Fragment previousFragment) {
+		private final Function<String, Object> requestParameters;
+
+		public SlotUpdatedEvent(Slot slot, ConfStateBinding confState, Fragment previousFragment,
+				Function<String, Object> requestParameters) {
 			super(slot, confState);
 			this.previousFragment = previousFragment;
+			this.requestParameters = requestParameters;
 		}
 
 		public Fragment getPreviousFragment() {
@@ -72,6 +77,10 @@ public interface SlotListener {
 
 		public boolean shouldRollback() {
 			return rollbackUpdate;
+		}
+
+		public Object getRequestParameter(String key) {
+			return key == null || requestParameters == null ? null : requestParameters.apply(key);
 		}
 
 	}
