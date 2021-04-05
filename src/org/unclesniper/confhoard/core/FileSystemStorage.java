@@ -16,12 +16,16 @@ import java.io.DataOutputStream;
 import java.util.IdentityHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.security.MessageDigest;
+import java.io.FileNotFoundException;
 import java.io.UTFDataFormatException;
+import java.security.NoSuchAlgorithmException;
 import org.unclesniper.confhoard.core.util.IOSink;
 
 public class FileSystemStorage implements Storage {
 
 	/* struct Index {
+	 *   String hashAlgorithm;
 	 *   int count;
 	 *   Slot slots[count];
 	 * }
@@ -32,6 +36,8 @@ public class FileSystemStorage implements Storage {
 	 * }
 	 * struct Fragment {
 	 *   long id;
+	 *   int hashLength;
+	 *   byte hash[hashLength];
 	 * }
 	 */
 
@@ -39,8 +45,8 @@ public class FileSystemStorage implements Storage {
 
 		private final long id;
 
-		public FSFragment(Slot slot, long id) {
-			super(slot);
+		public FSFragment(Slot slot, long id, String hashAlgorithm, byte[] hash) {
+			super(slot, hashAlgorithm, hash);
 			if(id < 0)
 				throw new IllegalArgumentException("Fragment ID cannot be negative: " + id);
 			this.id = id;
@@ -158,9 +164,14 @@ public class FileSystemStorage implements Storage {
 	}
 
 	@Override
-	public void loadFragments(Function<String, Slot> slots, Consumer<Slot> loadedSink) throws IOException {
+	public void loadFragments(Function<String, Slot> slots, Consumer<Slot> loadedSink, String hashAlgorithm)
+			throws IOException {
 		if(loaded)
 			return;
+		if(slots == null)
+			throw new IllegalArgumentException("Slot mapper cannot be null");
+		if(hashAlgorithm == null)
+			throw new IllegalArgumentException("Hash algorithm cannot be null");
 		synchronized(getLocalLock()) {
 			if(loaded)
 				return;
@@ -179,6 +190,8 @@ public class FileSystemStorage implements Storage {
 			long nextID = 0L;
 			try(FileInputStream fis = new FileInputStream(indexFile)) {
 				DataInputStream dis = new DataInputStream(fis);
+				String indexHashAlgorithm = dis.readUTF();
+				boolean sameHashAlgorithm = indexHashAlgorithm.equals(hashAlgorithm);
 				int slotCount = dis.readInt();
 				if(slotCount < 0)
 					throw new CorruptedIndexException(indexFile, "Slot count is negative: " + slotCount);
@@ -214,12 +227,29 @@ public class FileSystemStorage implements Storage {
 						if(id < (fragmentIndex == 0 ? -1L : 0L))
 							throw new CorruptedIndexException(indexFile, "Fragment ID is negative for slot '"
 									+ key + "' fragment #" + fragmentIndex + ": " + id);
+						int hashLength = dis.readInt();
+						if(hashLength < 0)
+							throw new CorruptedIndexException(indexFile, "Hash length is negative for slot '"
+									+ key + "' fragment #" + fragmentIndex + ": " + hashLength);
+						byte[] hashBuffer = hashLength == 0 ? null : new byte[hashLength];
+						if(hashBuffer != null) {
+							int hashOffset = 0;
+							while(hashOffset < hashBuffer.length) {
+								int count = dis.read(hashBuffer, hashOffset, hashBuffer.length - hashOffset);
+								if(count <= 0)
+									throw new EOFException();
+								hashOffset += count;
+							}
+						}
 						if(id == -1L) {
 							if(effectiveSlot != null)
 								effectiveSlot.setFragment(null);
 						}
 						else if(effectiveSlot != null) {
-							FSFragment fragment = new FSFragment(effectiveSlot, id);
+							ensureFragmentExists(id);
+							if(hashBuffer == null || !sameHashAlgorithm)
+								hashBuffer = hashFragment(id, hashAlgorithm);
+							FSFragment fragment = new FSFragment(effectiveSlot, id, hashAlgorithm, hashBuffer);
 							if(id >= nextID)
 								nextID = id + 1L;
 							state.addFragment(fragment);
@@ -242,18 +272,50 @@ public class FileSystemStorage implements Storage {
 				throw new CorruptedIndexException(indexFile, "Unexpected end of file");
 			}
 			catch(UTFDataFormatException udfe) {
-				throw new CorruptedIndexException(indexFile, "Malencoded slot key for slot #" + slotIndex);
+				if(slotIndex < 0)
+					throw new CorruptedIndexException(indexFile, "Malencoded hash algorithm name");
+				else
+					throw new CorruptedIndexException(indexFile, "Malencoded slot key for slot #" + slotIndex);
 			}
 			loaded = true;
 		}
 	}
 
+	private void ensureFragmentExists(long id) throws FileNotFoundException {
+		File file = new File(directory, id + ".frag");
+		if(!file.exists())
+			throw new FileNotFoundException("Missing fragment file: " + file.getPath());
+	}
+
+	private byte[] hashFragment(long id, String hashAlgorithm) throws IOException {
+		MessageDigest md;
+		try {
+			md = MessageDigest.getInstance(hashAlgorithm);
+		}
+		catch(NoSuchAlgorithmException nsae) {
+			throw new IllegalStateException(nsae.getMessage(), nsae);
+		}
+		File file = new File(directory, id + ".frag");
+		try(FileInputStream fis = new FileInputStream(file)) {
+			byte[] buffer = new byte[512];
+			for(;;) {
+				int count = fis.read(buffer);
+				if(count <= 0)
+					break;
+				md.update(buffer, 0, count);
+			}
+		}
+		return md.digest();
+	}
+
 	@Override
-	public Fragment newFragment(Slot slot, InputStream content) throws IOException {
+	public Fragment newFragment(Slot slot, InputStream content, String hashAlgorithm) throws IOException {
 		if(slot == null)
 			throw new IllegalArgumentException("Slot cannot be null");
 		if(content == null)
 			throw new IllegalArgumentException("Content InputStream cannot be null");
+		if(hashAlgorithm == null)
+			throw new IllegalArgumentException("Hash algorithm cannot be null");
 		if(!loaded)
 			throw new IllegalStateException("Storage was not loaded");
 		synchronized(getLocalLock()) {
@@ -277,12 +339,13 @@ public class FileSystemStorage implements Storage {
 				catch(IOException ioe2) {}
 				throw ioe;
 			}
+			byte[] hashBuffer = hashFragment(nextFragmentID, hashAlgorithm);
 			FSSlotState state = slotStates.get(slot);
 			if(state == null) {
 				state = new FSSlotState();
 				slotStates.put(slot, state);
 			}
-			FSFragment fragment = new FSFragment(slot, nextFragmentID);
+			FSFragment fragment = new FSFragment(slot, nextFragmentID, hashAlgorithm, hashBuffer);
 			state.addFragment(fragment);
 			++nextFragmentID;
 			saveIndex();

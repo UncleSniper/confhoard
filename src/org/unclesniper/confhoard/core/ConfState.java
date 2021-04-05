@@ -3,6 +3,7 @@ package org.unclesniper.confhoard.core;
 import java.util.Map;
 import java.util.Set;
 import java.util.List;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.io.IOException;
@@ -15,11 +16,15 @@ import org.unclesniper.confhoard.core.security.Credentials;
 
 public class ConfState {
 
+	public static final String DEFAULT_HASH_ALGORITHM = "SHA-256";
+
 	private volatile ConfManagementState managementState;
 
 	private volatile Storage storage;
 
 	private volatile boolean fragmentsLoaded;
+
+	private String hashAlgorithm = ConfState.DEFAULT_HASH_ALGORITHM;
 
 	private final Map<String, Slot> slots = new HashMap<String, Slot>();
 
@@ -48,6 +53,16 @@ public class ConfState {
 		if(storage != this.storage)
 			fragmentsLoaded = false;
 		this.storage = storage;
+	}
+
+	public String getHashAlgorithm() {
+		return hashAlgorithm;
+	}
+
+	public void setHashAlgorithm(String hashAlgorithm) {
+		if(hashAlgorithm == null || hashAlgorithm.length() == 0)
+			hashAlgorithm = ConfState.DEFAULT_HASH_ALGORITHM;
+		this.hashAlgorithm = hashAlgorithm;
 	}
 
 	public Set<String> getSlotKeys() {
@@ -93,7 +108,7 @@ public class ConfState {
 			throw new IllegalStateException("No storage backend is configured");
 		if(!fragmentsLoaded) {
 			Set<Slot> loadedSlots = new HashSet<Slot>();
-			storage.loadFragments(slots::get, loadedSlots::add);
+			storage.loadFragments(slots::get, loadedSlots::add, hashAlgorithm);
 			fragmentsLoaded = true;
 			for(Slot slot : loadedSlots)
 				slot.fireSlotLoaded(new SlotListener.SlotLoadedEvent(slot), null);
@@ -113,8 +128,12 @@ public class ConfState {
 			throw new NoSuchSlotException(key);
 		if(!slot.mayPerformAction(SlotAction.UPDATE, credentials))
 			throw new SlotAccessForbiddenException(slot, SlotAction.UPDATE);
-		Fragment newFragment = getLoadedStorage().newFragment(slot, content);
+		Fragment newFragment = getLoadedStorage().newFragment(slot, content, hashAlgorithm);
 		Fragment oldFragment = slot.getFragment();
+		if(oldFragment != null && Arrays.equals(oldFragment.getHash(), newFragment.getHash())) {
+			newFragment.remove();
+			return null;
+		}
 		List<SlotListener> fired = new LinkedList<SlotListener>();
 		SlotListener.SlotUpdatedEvent event = new SlotListener.SlotUpdatedEvent(slot, oldFragment);
 		slot.setFragment(newFragment);

@@ -8,9 +8,10 @@ import org.unclesniper.confhoard.core.util.IOSink;
 
 public interface Storage {
 
-	void loadFragments(Function<String, Slot> slots, Consumer<Slot> loaded) throws IOException;
+	void loadFragments(Function<String, Slot> slots, Consumer<Slot> loaded, String hashAlgorithm)
+			throws IOException;
 
-	Fragment newFragment(Slot slot, InputStream content) throws IOException;
+	Fragment newFragment(Slot slot, InputStream content, String hashAlgorithm) throws IOException;
 
 	void listFragments(IOSink<Fragment> sink) throws IOException;
 

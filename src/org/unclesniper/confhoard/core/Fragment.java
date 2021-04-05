@@ -11,4 +11,8 @@ public interface Fragment {
 
 	void remove() throws IOException;
 
+	String getHashAlgorithm();
+
+	byte[] getHash();
+
 }
