@@ -104,6 +104,17 @@ public class FileSystemStorage implements Storage {
 
 	}
 
+	private class FSSlotStorageListener implements SlotStorageListener {
+
+		public FSSlotStorageListener() {}
+
+		@Override
+		public void saveSlot() throws IOException {
+			saveIndex();
+		}
+
+	}
+
 	public static class CorruptedIndexException extends IOException {
 
 		private final File indexFile;
@@ -133,6 +144,8 @@ public class FileSystemStorage implements Storage {
 	private final Map<Slot, FSSlotState> slotStates = new IdentityHashMap<Slot, FSSlotState>();
 
 	private boolean purgeOnLoad = true;
+
+	private final SlotStorageListener slotStorageListener = new FSSlotStorageListener();
 
 	public FileSystemStorage() {}
 
@@ -185,6 +198,8 @@ public class FileSystemStorage implements Storage {
 				}
 				Files.move(newIndex.toPath(), indexFile.toPath());
 			}
+			for(Slot oldSlot : slotStates.keySet())
+				oldSlot.removeStorageListener(slotStorageListener);
 			slotStates.clear();
 			int slotIndex = -1;
 			Set<String> seenKeys = new HashSet<String>();
@@ -217,6 +232,8 @@ public class FileSystemStorage implements Storage {
 						if(state == null) {
 							state = new FSSlotState();
 							slotStates.put(effectiveSlot, state);
+							if(effectiveSlot == trueSlot)
+								effectiveSlot.addStorageListener(slotStorageListener);
 						}
 					}
 					int fragmentCount = dis.readInt();
@@ -345,6 +362,7 @@ public class FileSystemStorage implements Storage {
 			if(state == null) {
 				state = new FSSlotState();
 				slotStates.put(slot, state);
+				slot.addStorageListener(slotStorageListener);
 			}
 			FSFragment fragment = new FSFragment(slot, nextFragmentID, hashAlgorithm, hashBuffer);
 			state.addFragment(fragment);
