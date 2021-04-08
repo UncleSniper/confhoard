@@ -26,6 +26,11 @@ public class TextSlotUpdateIssue implements SlotUpdateIssue {
 		boolean cause = false;
 		do {
 			lines.add((cause ? "Caused by: " : "") + t);
+			if(t instanceof SlotUpdateIssue) {
+				Iterator<String> it = ((SlotUpdateIssue)t).getMessageLines();
+				while(it.hasNext())
+					lines.add("  | " + it.next());
+			}
 			for(StackTraceElement frame : t.getStackTrace())
 				lines.add("    at " + frame);
 			t = t.getCause();
