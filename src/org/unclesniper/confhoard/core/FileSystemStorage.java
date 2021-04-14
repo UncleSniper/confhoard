@@ -16,11 +16,11 @@ import java.io.DataOutputStream;
 import java.util.IdentityHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.security.MessageDigest;
 import java.io.FileNotFoundException;
 import java.io.UTFDataFormatException;
-import java.security.NoSuchAlgorithmException;
 import org.unclesniper.confhoard.core.util.IOSink;
+import org.unclesniper.confhoard.core.util.HashUtils;
+import org.unclesniper.confhoard.core.security.Credentials;
 
 public class FileSystemStorage implements Storage {
 
@@ -57,8 +57,14 @@ public class FileSystemStorage implements Storage {
 		}
 
 		@Override
-		public InputStream retrieve(ConfStateBinding state, Function<String, Object> parameters)
-				throws IOException {
+		protected byte[] renewHash(String algorithm, Credentials credentials, ConfStateBinding state,
+				Function<String, Object> parameters) throws IOException {
+			return hashFragment(id, algorithm);
+		}
+
+		@Override
+		public InputStream retrieve(Credentials credentials, ConfStateBinding state,
+				Function<String, Object> parameters) throws IOException {
 			return new FileInputStream(new File(directory, id + ".frag"));
 		}
 
@@ -306,24 +312,10 @@ public class FileSystemStorage implements Storage {
 	}
 
 	private byte[] hashFragment(long id, String hashAlgorithm) throws IOException {
-		MessageDigest md;
-		try {
-			md = MessageDigest.getInstance(hashAlgorithm);
-		}
-		catch(NoSuchAlgorithmException nsae) {
-			throw new IllegalStateException(nsae.getMessage(), nsae);
-		}
 		File file = new File(directory, id + ".frag");
 		try(FileInputStream fis = new FileInputStream(file)) {
-			byte[] buffer = new byte[512];
-			for(;;) {
-				int count = fis.read(buffer);
-				if(count <= 0)
-					break;
-				md.update(buffer, 0, count);
-			}
+			return HashUtils.hashStream(fis, hashAlgorithm);
 		}
-		return md.digest();
 	}
 
 	@Override

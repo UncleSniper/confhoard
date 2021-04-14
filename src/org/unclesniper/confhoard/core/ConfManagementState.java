@@ -32,6 +32,11 @@ public class ConfManagementState implements ConfStateBinding {
 	}
 
 	@Override
+	public String getHashAlgorithm() {
+		return confState.getHashAlgorithm();
+	}
+
+	@Override
 	public Set<String> getSlotKeys() {
 		return confState.getSlotKeys();
 	}
@@ -61,6 +66,13 @@ public class ConfManagementState implements ConfStateBinding {
 			ConfStateBinding outerState, Function<String, Object> parameters)
 			throws IOException, ConfHoardException {
 		return confState.updateSlot(key, content, credentials, outerState == null ? this : outerState, parameters);
+	}
+
+	@Override
+	public Fragment updateSlot(Slot slot, InputStream content, Credentials credentials,
+			ConfStateBinding outerState, Function<String, Object> parameters)
+			throws IOException, ConfHoardException {
+		return confState.updateSlot(slot, content, credentials, outerState == null ? this : outerState, parameters);
 	}
 
 	@Override

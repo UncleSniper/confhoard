@@ -4,10 +4,12 @@ import java.util.List;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.function.Function;
+import org.unclesniper.confhoard.core.security.Credentials;
+import org.unclesniper.confhoard.core.security.SystemInternalCredentials;
 
 public interface SlotListener {
 
-	public class SlotEvent {
+	public abstract class SlotEvent {
 
 		private final Slot slot;
 
@@ -26,6 +28,8 @@ public interface SlotListener {
 			return confState;
 		}
 
+		public abstract Credentials getCredentials();
+
 	}
 
 	public class SlotLoadedEvent extends SlotEvent {
@@ -34,11 +38,18 @@ public interface SlotListener {
 			super(slot, confState);
 		}
 
+		@Override
+		public Credentials getCredentials() {
+			return SystemInternalCredentials.instance;
+		}
+
 	}
 
 	public class SlotUpdatedEvent extends SlotEvent {
 
 		private final Fragment previousFragment;
+
+		private final Fragment nextFragment;
 
 		private final List<SlotUpdateIssue> issues = new LinkedList<SlotUpdateIssue>();
 
@@ -46,15 +57,23 @@ public interface SlotListener {
 
 		private final Function<String, Object> requestParameters;
 
-		public SlotUpdatedEvent(Slot slot, ConfStateBinding confState, Fragment previousFragment,
-				Function<String, Object> requestParameters) {
+		private final Credentials credentials;
+
+		public SlotUpdatedEvent(Slot slot, Credentials credentials, ConfStateBinding confState,
+				Fragment previousFragment, Fragment nextFragment, Function<String, Object> requestParameters) {
 			super(slot, confState);
+			this.credentials = credentials;
 			this.previousFragment = previousFragment;
+			this.nextFragment = nextFragment;
 			this.requestParameters = requestParameters;
 		}
 
 		public Fragment getPreviousFragment() {
 			return previousFragment;
+		}
+
+		public Fragment getNextFragment() {
+			return nextFragment;
 		}
 
 		public void addSlotUpdateIssue(SlotUpdateIssue issue) {
@@ -81,6 +100,11 @@ public interface SlotListener {
 
 		public Object getRequestParameter(String key) {
 			return key == null || requestParameters == null ? null : requestParameters.apply(key);
+		}
+
+		@Override
+		public Credentials getCredentials() {
+			return credentials;
 		}
 
 	}

@@ -99,20 +99,19 @@ public class ExecSlotListener extends SelectingSlotListener {
 
 	@Override
 	protected void selectedSlotLoaded(SlotLoadedEvent event) throws IOException, ConfHoardException {
-		doExec(event, null);
+		doExec(event, event.getSlot().getFragment(), null);
 	}
 
 	@Override
 	protected void selectedSlotUpdated(SlotUpdatedEvent event) throws IOException, ConfHoardException {
-		doExec(event, event::getRequestParameter);
+		doExec(event, event.getNextFragment(), event::getRequestParameter);
 	}
 
-	private void doExec(SlotEvent event, Function<String, Object> parameters)
+	private void doExec(SlotEvent event, Fragment fragment, Function<String, Object> parameters)
 			throws IOException, ConfHoardException {
 		if(commandWords.isEmpty())
 			return;
 		Slot slot = event.getSlot();
-		Fragment fragment = slot.getFragment();
 		ProcessBuilder builder = new ProcessBuilder(commandWords);
 		Map<String, String> env = builder.environment();
 		for(Map.Entry<String, String> evar : environmentVariables.entrySet()) {
@@ -129,7 +128,8 @@ public class ExecSlotListener extends SelectingSlotListener {
 		}
 		try(OutputStream stdin = proc.getOutputStream()) {
 			if(fragmentAsStdin && fragment != null) {
-				try(InputStream content = fragment.retrieve(event.getConfState(), parameters)) {
+				try(InputStream content = fragment.retrieve(event.getCredentials(), event.getConfState(),
+						parameters)) {
 					withStdin(proc, stdin, content);
 				}
 			}

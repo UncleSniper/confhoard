@@ -57,6 +57,7 @@ public class ConfState implements ConfStateBinding {
 		this.storage = storage;
 	}
 
+	@Override
 	public String getHashAlgorithm() {
 		return hashAlgorithm;
 	}
@@ -139,6 +140,17 @@ public class ConfState implements ConfStateBinding {
 	}
 
 	@Override
+	public Fragment updateSlot(Slot slot, InputStream content, Credentials credentials,
+			ConfStateBinding outerState, Function<String, Object> parameters)
+			throws IOException, ConfHoardException {
+		if(slot == null)
+			throw new IllegalArgumentException("Slot cannot be null");
+		if(slots.get(slot.getKey()) != slot)
+			throw new IllegalArgumentException("Slot does now belong to this ConfState");
+		return updateOwnSlot(slot, content, credentials, outerState, parameters);
+	}
+
+	@Override
 	public Fragment updateSlot(String key, InputStream content, Credentials credentials,
 			ConfStateBinding outerState, Function<String, Object> parameters)
 			throws IOException, ConfHoardException {
@@ -150,37 +162,52 @@ public class ConfState implements ConfStateBinding {
 		}
 		if(slot == null)
 			throw new NoSuchSlotException(key);
+		return updateOwnSlot(slot, content, credentials, outerState, parameters);
+	}
+
+	private Fragment updateOwnSlot(Slot slot, InputStream content, Credentials credentials,
+			ConfStateBinding outerState, Function<String, Object> parameters)
+			throws IOException, ConfHoardException {
 		if(!slot.mayPerformAction(SlotAction.UPDATE, credentials))
 			throw new SlotAccessForbiddenException(slot, SlotAction.UPDATE);
-		Fragment newFragment = getLoadedStorage(outerState).newFragment(slot, content, hashAlgorithm);
+		ConfStateBinding innerState = outerState == null ? this : outerState;
+		Fragment newFragment = getLoadedStorage(innerState).newFragment(slot, content, hashAlgorithm);
 		Fragment oldFragment = slot.getFragment();
-		if(oldFragment != null && Arrays.equals(oldFragment.getHash(), newFragment.getHash())) {
+		String hashAlgorithm = innerState.getHashAlgorithm();
+		if(oldFragment != null
+				&& compareHashes(oldFragment, newFragment, hashAlgorithm, credentials, innerState, parameters)) {
 			newFragment.remove();
 			return null;
 		}
 		List<SlotListener> fired = new LinkedList<SlotListener>();
-		SlotListener.SlotUpdatedEvent event = new SlotListener.SlotUpdatedEvent(slot,
-				outerState == null ? this : outerState, oldFragment, parameters);
-		slot.setFragment(newFragment);
+		SlotListener.SlotUpdatedEvent event = new SlotListener.SlotUpdatedEvent(slot, credentials,
+				innerState, oldFragment, newFragment, parameters);
+		boolean setFragmentTook = false;
 		try {
 			slot.fireSlotUpdated(event, fired::add);
+			slot.setFragment(newFragment);
 			slot.fireFragmentUpdated();
+			setFragmentTook = true;
 		}
 		catch(RuntimeException | IOException | ConfHoardException e) {
-			return slotUpdateFailed(slot, oldFragment, event, fired, e);
+			return slotUpdateFailed(slot, oldFragment, newFragment, event, fired, e);
+		}
+		finally {
+			if(!setFragmentTook)
+				slot.setFragment(oldFragment);
 		}
 		if(event.shouldRollback())
-			return slotUpdateFailed(slot, oldFragment, event, fired, null);
+			return slotUpdateFailed(slot, oldFragment, newFragment, event, fired, null);
 		return newFragment;
 	}
 
-	private Fragment slotUpdateFailed(Slot slot, Fragment oldFragment, SlotListener.SlotUpdatedEvent event,
-			List<SlotListener> fired, Throwable cause) throws SlotUpdateFailedException {
-		Fragment newFragment = slot.getFragment();
+	private Fragment slotUpdateFailed(Slot slot, Fragment oldFragment, Fragment newFragment,
+			SlotListener.SlotUpdatedEvent event, List<SlotListener> fired, Throwable cause)
+			throws SlotUpdateFailedException {
 		slot.setFragment(oldFragment);
 		if(event.shouldRollback()) {
 			SlotListener.SlotUpdatedEvent rollbackEvent = new SlotListener.SlotUpdatedEvent(slot,
-					event.getConfState(), newFragment, null);
+					event.getCredentials(), event.getConfState(), newFragment, oldFragment, null);
 			try {
 				for(SlotListener listener : fired)
 					listener.slotUpdated(rollbackEvent);
@@ -210,6 +237,14 @@ public class ConfState implements ConfStateBinding {
 		throw new SlotUpdateFailedException(slot, multi, rollback);
 	}
 
+	private boolean compareHashes(Fragment oldFragment, Fragment newFragment, String hashAlgorithm,
+			Credentials credentials, ConfStateBinding confState, Function<String, Object> parameters)
+			throws IOException {
+		byte[] oldHash = oldFragment.getHash(hashAlgorithm, credentials, confState, parameters);
+		byte[] newHash = newFragment.getHash(hashAlgorithm, credentials, confState, parameters);
+		return Arrays.equals(oldHash, newHash);
+	}
+
 	@Override
 	public void retrieveSlot(String key, Credentials credentials, ConfStateBinding outerState,
 			Function<String, Object> parameters, HoardSink<InputStream> sink)
@@ -230,7 +265,8 @@ public class ConfState implements ConfStateBinding {
 		if(fragment == null)
 			sink.accept(null);
 		else {
-			try(InputStream is = fragment.retrieve(outerState == null ? this : outerState, parameters)) {
+			try(InputStream is = fragment.retrieve(credentials, outerState == null ? this : outerState,
+					parameters)) {
 				sink.accept(is);
 			}
 		}

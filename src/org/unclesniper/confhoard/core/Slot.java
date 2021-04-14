@@ -19,6 +19,8 @@ public class Slot {
 
 	private String mimeType;
 
+	private String description;
+
 	private final Listeners<SlotListener> slotListeners = new Listeners<SlotListener>();
 
 	private final Map<SlotStorageListener, SlotStorageListener> storageListeners
@@ -30,9 +32,15 @@ public class Slot {
 	private boolean skipOnRollback = true;
 
 	public Slot(String key) {
+		this(key, null);
+	}
+
+	public Slot(String key, Fragment fragment) {
 		if(key == null)
 			throw new IllegalArgumentException("Slot key cannot be null");
+		Slot.ensureDoesNotContainLineEnding(key, "Slot key");
 		this.key = key;
+		this.fragment = fragment;
 	}
 
 	public String getKey() {
@@ -56,21 +64,39 @@ public class Slot {
 		return fragment;
 	}
 
-	public void setFragment(Fragment fragment) {
+	protected final void setFragmentLocally(Fragment fragment) {
 		if(fragment != null && fragment.getSlot() != this)
 			throw new IllegalArgumentException("Cannot put fragment into slot '" + key
 					+ "', as it belongs to slot '" + fragment.getSlot().getKey() + "'");
 		this.fragment = fragment;
 	}
 
+	public void setFragment(Fragment fragment) {
+		setFragmentLocally(fragment);
+	}
+
 	public String getMimeType() {
 		return mimeType;
 	}
 
-	public void setMimeType(String mimeType) {
+	protected final void setMimeTypeLocally(String mimeType) {
 		if(mimeType != null && mimeType.length() == 0)
 			mimeType = null;
 		this.mimeType = mimeType;
+	}
+
+	public void setMimeType(String mimeType) {
+		setMimeTypeLocally(mimeType);
+	}
+
+	public String getDescription() {
+		return description;
+	}
+
+	public void setDescription(String description) {
+		if(this.description != null)
+			ensureDoesNotContainLineEnding(description, "Slot description");
+		this.description = description;
 	}
 
 	public boolean isSkipOnRollback() {
@@ -145,6 +171,18 @@ public class Slot {
 			}
 		}
 		return false;
+	}
+
+	private static String renderBrokenKey(String key) {
+		return key
+				.replace("\n", "<newline>")
+				.replace("\r", "<carriage return>")
+				.replace("\r\n", "<carriage return, newline>");
+	}
+
+	private static void ensureDoesNotContainLineEnding(String str, String what) {
+		if(str.indexOf('\n') >= 0 || str.indexOf('\r') >= 0)
+			throw new IllegalArgumentException(what + " cannot contain line ending: " + Slot.renderBrokenKey(str));
 	}
 
 }

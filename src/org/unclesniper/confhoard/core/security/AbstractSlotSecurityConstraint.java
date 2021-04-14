@@ -26,6 +26,8 @@ public abstract class AbstractSlotSecurityConstraint implements SlotSecurityCons
 	public boolean mayPerform(Slot slot, SlotAction action, Credentials credentials) {
 		if(action == null)
 			throw new IllegalArgumentException("Action cannot be null");
+		if(credentials instanceof EverythingIsAllowedCredentials)
+			return true;
 		if((permissions & (1 << action.ordinal())) == 0)
 			return false;
 		return mayPerformAnyAction(slot, credentials);
