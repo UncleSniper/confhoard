@@ -115,12 +115,12 @@ public class Slot {
 		return slotListeners.removeListener(listener);
 	}
 
-	void fireSlotLoaded(SlotListener.SlotLoadedEvent event, Consumer<SlotListener> fired)
+	public void fireSlotLoaded(SlotListener.SlotLoadedEvent event, Consumer<SlotListener> fired)
 			throws IOException, ConfHoardException {
 		slotListeners.confFire(listener -> listener.slotLoaded(event), fired, null);
 	}
 
-	void fireSlotUpdated(SlotListener.SlotUpdatedEvent event, Consumer<SlotListener> fired)
+	public void fireSlotUpdated(SlotListener.SlotUpdatedEvent event, Consumer<SlotListener> fired)
 			throws IOException, ConfHoardException {
 		slotListeners.confFire(listener -> listener.slotUpdated(event), fired,
 				skipOnRollback ? event::shouldRollback : null);
@@ -142,7 +142,7 @@ public class Slot {
 		}
 	}
 
-	void fireFragmentUpdated() throws IOException {
+	public void fireFragmentUpdated() throws IOException {
 		synchronized(storageListeners) {
 			for(SlotStorageListener listener : storageListeners.keySet())
 				listener.saveSlot();
