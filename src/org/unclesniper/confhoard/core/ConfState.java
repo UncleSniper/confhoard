@@ -140,35 +140,23 @@ public class ConfState implements ConfStateBinding {
 	}
 
 	@Override
-	public Fragment updateSlot(Slot slot, InputStream content, Credentials credentials,
+	public Fragment updateSlot(Slot slot, InputStream content, Credentials credentials, boolean enforceAccess,
 			ConfStateBinding outerState, Function<String, Object> parameters)
 			throws IOException, ConfHoardException {
-		if(slot == null)
-			throw new IllegalArgumentException("Slot cannot be null");
-		if(slots.get(slot.getKey()) != slot)
-			throw new IllegalArgumentException("Slot does now belong to this ConfState");
-		return updateOwnSlot(slot, content, credentials, outerState, parameters);
+		return updateOwnSlot(slotBySlot(slot), content, credentials, enforceAccess, outerState, parameters);
 	}
 
 	@Override
-	public Fragment updateSlot(String key, InputStream content, Credentials credentials,
+	public Fragment updateSlot(String key, InputStream content, Credentials credentials, boolean enforceAccess,
 			ConfStateBinding outerState, Function<String, Object> parameters)
 			throws IOException, ConfHoardException {
-		if(key == null)
-			throw new IllegalArgumentException("Slot key cannot be null");
-		Slot slot;
-		synchronized(slots) {
-			slot = slots.get(key);
-		}
-		if(slot == null)
-			throw new NoSuchSlotException(key);
-		return updateOwnSlot(slot, content, credentials, outerState, parameters);
+		return updateOwnSlot(slotByKey(key), content, credentials, enforceAccess, outerState, parameters);
 	}
 
-	private Fragment updateOwnSlot(Slot slot, InputStream content, Credentials credentials,
+	private Fragment updateOwnSlot(Slot slot, InputStream content, Credentials credentials, boolean enforceAccess,
 			ConfStateBinding outerState, Function<String, Object> parameters)
 			throws IOException, ConfHoardException {
-		if(!slot.mayPerformAction(SlotAction.UPDATE, credentials))
+		if(enforceAccess && !slot.mayPerformAction(SlotAction.UPDATE, credentials))
 			throw new SlotAccessForbiddenException(slot, SlotAction.UPDATE);
 		ConfStateBinding innerState = outerState == null ? this : outerState;
 		Fragment newFragment = getLoadedStorage(innerState).newFragment(slot, content, hashAlgorithm);
@@ -246,20 +234,25 @@ public class ConfState implements ConfStateBinding {
 	}
 
 	@Override
-	public void retrieveSlot(String key, Credentials credentials, ConfStateBinding outerState,
-			Function<String, Object> parameters, HoardSink<InputStream> sink)
+	public void retrieveSlot(String key, Credentials credentials, boolean enforceAccess,
+			ConfStateBinding outerState, Function<String, Object> parameters, HoardSink<InputStream> sink)
 			throws IOException, ConfHoardException {
-		if(key == null)
-			throw new IllegalArgumentException("Slot key cannot be null");
+		retrieveOwnSlot(slotByKey(key), credentials, enforceAccess, outerState, parameters, sink);
+	}
+
+	@Override
+	public void retrieveSlot(Slot slot, Credentials credentials, boolean enforceAccess,
+			ConfStateBinding outerState, Function<String, Object> parameters, HoardSink<InputStream> sink)
+			throws IOException, ConfHoardException {
+		retrieveOwnSlot(slotBySlot(slot), credentials, enforceAccess, outerState, parameters, sink);
+	}
+
+	private void retrieveOwnSlot(Slot slot, Credentials credentials, boolean enforceAccess,
+			ConfStateBinding outerState, Function<String, Object> parameters, HoardSink<InputStream> sink)
+			throws IOException, ConfHoardException {
 		if(sink == null)
 			throw new IllegalArgumentException("Sink cannot be null");
-		Slot slot;
-		synchronized(slots) {
-			slot = slots.get(key);
-		}
-		if(slot == null)
-			throw new NoSuchSlotException(key);
-		if(!slot.mayPerformAction(SlotAction.RETRIEVE, credentials))
+		if(enforceAccess && !slot.mayPerformAction(SlotAction.RETRIEVE, credentials))
 			throw new SlotAccessForbiddenException(slot, SlotAction.RETRIEVE);
 		Fragment fragment = slot.getFragment();
 		if(fragment == null)
@@ -270,6 +263,46 @@ public class ConfState implements ConfStateBinding {
 				sink.accept(is);
 			}
 		}
+	}
+
+	@Override
+	public void requireAccess(String key, SlotAction action, Credentials credentials)
+			throws NoSuchSlotException, SlotAccessForbiddenException {
+		Slot slot = slotByKey(key);
+		if(action == null)
+			throw new IllegalArgumentException("Slot action cannot be null");
+		if(!slot.mayPerformAction(action, credentials))
+			throw new SlotAccessForbiddenException(slot, action);
+	}
+
+	@Override
+	public void requireAccess(Slot slot, SlotAction action, Credentials credentials)
+			throws SlotAccessForbiddenException {
+		slotBySlot(slot);
+		if(action == null)
+			throw new IllegalArgumentException("Slot action cannot be null");
+		if(!slot.mayPerformAction(action, credentials))
+			throw new SlotAccessForbiddenException(slot, action);
+	}
+
+	private Slot slotBySlot(Slot slot) {
+		if(slot == null)
+			throw new IllegalArgumentException("Slot cannot be null");
+		if(slots.get(slot.getKey()) != slot)
+			throw new IllegalArgumentException("Slot does now belong to this ConfState");
+		return slot;
+	}
+
+	private Slot slotByKey(String key) throws NoSuchSlotException {
+		if(key == null)
+			throw new IllegalArgumentException("Slot key cannot be null");
+		Slot slot;
+		synchronized(slots) {
+			slot = slots.get(key);
+		}
+		if(slot == null)
+			throw new NoSuchSlotException(key);
+		return slot;
 	}
 
 }
