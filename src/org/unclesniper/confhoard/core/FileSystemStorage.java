@@ -22,7 +22,7 @@ import org.unclesniper.confhoard.core.util.IOSink;
 import org.unclesniper.confhoard.core.util.HashUtils;
 import org.unclesniper.confhoard.core.security.Credentials;
 
-public class FileSystemStorage implements Storage {
+public class FileSystemStorage extends AbstractStorage implements Storage {
 
 	/* struct Index {
 	 *   String hashAlgorithm;
@@ -288,6 +288,12 @@ public class FileSystemStorage implements Storage {
 					}
 					if(trueSlot != null && loadedSink != null)
 						loadedSink.accept(trueSlot);
+					if(effectiveSlot == null)
+						safeFireSlotPurged(new StorageListener.SlotPurgedStorageEvent(this, new Slot(key),
+								fragmentCount));
+					else if(trueSlot != null)
+						safeFireSlotLoaded(new StorageListener.SlotLoadedStorageEvent(this, effectiveSlot,
+								fragmentCount));
 				}
 				if(dis.read() >= 0)
 					throw new CorruptedIndexException(indexFile, "Excess data after end of index");

@@ -15,4 +15,8 @@ public interface Storage {
 
 	void listFragments(IOSink<Fragment> sink) throws IOException;
 
+	void addStorageListener(StorageListener listener);
+
+	boolean removeStorageListener(StorageListener listener);
+
 }
