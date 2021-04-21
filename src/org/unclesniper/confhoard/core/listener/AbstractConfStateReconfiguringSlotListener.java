@@ -19,7 +19,7 @@ public abstract class AbstractConfStateReconfiguringSlotListener extends Selecti
 			throw new IllegalArgumentException("No ConfStateBinding configured");
 		if(fragment == null)
 			return;
-		ConfState newState = parseConfState(event, fragment, credentials, requestParameters);
+		ConfState newState = parseConfState(event, fragment, credentials, outerState, requestParameters);
 		if(newState == null)
 			return;
 		newState.getLoadedStorage(outerState);
@@ -27,7 +27,8 @@ public abstract class AbstractConfStateReconfiguringSlotListener extends Selecti
 	}
 
 	protected abstract ConfState parseConfState(SlotEvent event, Fragment fragment, Credentials credentials,
-			Function<String, Object> requestParameters) throws IOException, ConfHoardException;
+			ConfStateBinding state, Function<String, Object> requestParameters)
+			throws IOException, ConfHoardException;
 
 	@Override
 	protected void selectedSlotLoaded(SlotLoadedEvent event) throws IOException, ConfHoardException {
