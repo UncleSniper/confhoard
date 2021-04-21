@@ -9,6 +9,12 @@ import org.unclesniper.confhoard.core.ConfHoardException;
 
 public class Listeners<ListenerT> {
 
+	public interface Fire<ListenerT> {
+
+		void fire(ListenerT listener);
+
+	}
+
 	public interface IOFire<ListenerT> {
 
 		void fire(ListenerT listener) throws IOException;
@@ -47,17 +53,29 @@ public class Listeners<ListenerT> {
 		return true;
 	}
 
-	public void ioFire(IOFire<ListenerT> fire, Consumer<ListenerT> fired, BooleanSupplier stop) throws IOException {
+	private List<ListenerT> getFireList() {
 		List<ListenerT> c = cache;
-		if(c == null) {
-			synchronized(listeners) {
-				if(cache != null)
-					c = cache;
-				else
-					cache = c = new LinkedList<ListenerT>(listeners);
-			}
+		if(c != null)
+			return c;
+		synchronized(listeners) {
+			if(cache != null)
+				return cache;
+			return cache = new LinkedList<ListenerT>(listeners);
 		}
-		for(ListenerT listener : c) {
+	}
+
+	public void fire(Fire<ListenerT> fire, Consumer<ListenerT> fired, BooleanSupplier stop) {
+		for(ListenerT listener : getFireList()) {
+			if(stop != null && stop.getAsBoolean())
+				break;
+			fire.fire(listener);
+			if(fired != null)
+				fired.accept(listener);
+		}
+	}
+
+	public void ioFire(IOFire<ListenerT> fire, Consumer<ListenerT> fired, BooleanSupplier stop) throws IOException {
+		for(ListenerT listener : getFireList()) {
 			if(stop != null && stop.getAsBoolean())
 				break;
 			fire.fire(listener);
@@ -68,16 +86,7 @@ public class Listeners<ListenerT> {
 
 	public void confFire(ConfFire<ListenerT> fire, Consumer<ListenerT> fired, BooleanSupplier stop)
 			throws IOException, ConfHoardException {
-		List<ListenerT> c = cache;
-		if(c == null) {
-			synchronized(listeners) {
-				if(cache != null)
-					c = cache;
-				else
-					cache = c = new LinkedList<ListenerT>(listeners);
-			}
-		}
-		for(ListenerT listener : c) {
+		for(ListenerT listener : getFireList()) {
 			if(stop != null && stop.getAsBoolean())
 				break;
 			fire.fire(listener);

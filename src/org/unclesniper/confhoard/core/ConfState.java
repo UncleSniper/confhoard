@@ -13,6 +13,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.function.Function;
 import org.unclesniper.confhoard.core.util.HoardSink;
+import org.unclesniper.confhoard.core.util.Listeners;
 import org.unclesniper.confhoard.core.security.SlotAction;
 import org.unclesniper.confhoard.core.security.Credentials;
 
@@ -29,6 +30,8 @@ public class ConfState implements ConfStateBinding {
 	private String hashAlgorithm = ConfState.DEFAULT_HASH_ALGORITHM;
 
 	private final Map<String, Slot> slots = new HashMap<String, Slot>();
+
+	private final Listeners<ConfStateListener> stateListeners = new Listeners<ConfStateListener>();
 
 	public ConfState() {}
 
@@ -80,6 +83,28 @@ public class ConfState implements ConfStateBinding {
 						outerState == null ? this : outerState), null);
 		}
 		return storage;
+	}
+
+	public void addStateListener(ConfStateListener listener) {
+		stateListeners.addListener(listener);
+	}
+
+	public boolean removeStateListener(ConfStateListener listener) {
+		return stateListeners.removeListener(listener);
+	}
+
+	public void fireSlotUpdateSucceeded(ConfStateListener.SlotUpdateSucceededStateEvent event)
+			throws IOException, ConfHoardException {
+		stateListeners.confFire(listener -> listener.slotUpdateSucceeded(event), null, null);
+	}
+
+	public void fireSlotUpdateFailed(ConfStateListener.SlotUpdateFailedStateEvent event)
+			throws IOException, ConfHoardException {
+		stateListeners.confFire(listener -> listener.slotUpdateFailed(event), null, null);
+	}
+
+	public void fireConfStateListenerFailed(ConfStateListener.ConfStateListenerFailedStateEvent event) {
+		stateListeners.fire(listener -> listener.confStateListenerFailed(event), null, null);
 	}
 
 	@Override
@@ -186,6 +211,8 @@ public class ConfState implements ConfStateBinding {
 		}
 		if(event.shouldRollback())
 			return slotUpdateFailed(slot, oldFragment, newFragment, event, fired, null);
+		safeFireSlotUpdateSucceeded(new ConfStateListener.SlotUpdateSucceededStateEvent(innerState, slot,
+				credentials, parameters));
 		return newFragment;
 	}
 
@@ -222,7 +249,39 @@ public class ConfState implements ConfStateBinding {
 				MultiSlotUpdateIssue.DEFAULT_LIST_LINE_TRANSFORM);
 		if(cause != null)
 			multi.addSlotUpdateIssue(new TextSlotUpdateIssue(cause));
-		throw new SlotUpdateFailedException(slot, multi, rollback);
+		SlotUpdateFailedException sufe = new SlotUpdateFailedException(slot, multi, rollback);
+		safeFireSlotUpdateFailed(new ConfStateListener.SlotUpdateFailedStateEvent(event.getConfState(),
+				event.getSlot(), event.getCredentials(), event::getRequestParameter, sufe));
+		throw sufe;
+	}
+
+	private void safeFireSlotUpdateSucceeded(ConfStateListener.SlotUpdateSucceededStateEvent event) {
+		try {
+			fireSlotUpdateSucceeded(event);
+		}
+		catch(IOException | ConfHoardException e) {
+			safeFireConfStateListenerFailed(new
+					ConfStateListener.ConfStateListenerFailedStateEvent(event.getConfState(), e));
+		}
+	}
+
+	private void safeFireSlotUpdateFailed(ConfStateListener.SlotUpdateFailedStateEvent event) {
+		try {
+			fireSlotUpdateFailed(event);
+		}
+		catch(IOException | ConfHoardException e) {
+			safeFireConfStateListenerFailed(new
+					ConfStateListener.ConfStateListenerFailedStateEvent(event.getConfState(), e));
+		}
+	}
+
+	private void safeFireConfStateListenerFailed(ConfStateListener.ConfStateListenerFailedStateEvent event) {
+		try {
+			fireConfStateListenerFailed(event);
+		}
+		catch(RuntimeException e) {
+			e.printStackTrace();
+		}
 	}
 
 	private boolean compareHashes(Fragment oldFragment, Fragment newFragment, String hashAlgorithm,
