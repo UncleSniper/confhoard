@@ -22,7 +22,7 @@ public abstract class AbstractConfStateReconfiguringSlotListener extends Selecti
 		ConfState newState = parseConfState(event, fragment, credentials, outerState, requestParameters);
 		if(newState == null)
 			return;
-		newState.getLoadedStorage(outerState);
+		newState.getLoadedStorage(outerState, requestParameters);
 		outerState.setConfState(newState);
 	}
 

@@ -28,7 +28,8 @@ public abstract class AbstractStorage implements Storage {
 			fireSlotLoaded(event);
 		}
 		catch(IOException | ConfHoardException e) {
-			safeFireStorageListenerFailed(new StorageListener.StorageListenerFailedStorageEvent(this, e));
+			safeFireStorageListenerFailed(new StorageListener.StorageListenerFailedStorageEvent(this, e,
+					event::getRequestParameter));
 		}
 	}
 
@@ -37,7 +38,8 @@ public abstract class AbstractStorage implements Storage {
 			fireSlotPurged(event);
 		}
 		catch(IOException | ConfHoardException e) {
-			safeFireStorageListenerFailed(new StorageListener.StorageListenerFailedStorageEvent(this, e));
+			safeFireStorageListenerFailed(new StorageListener.StorageListenerFailedStorageEvent(this, e,
+					event::getRequestParameter));
 		}
 	}
 

@@ -184,8 +184,8 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 	}
 
 	@Override
-	public void loadFragments(Function<String, Slot> slots, Consumer<Slot> loadedSink, String hashAlgorithm)
-			throws IOException {
+	public void loadFragments(Function<String, Slot> slots, Consumer<Slot> loadedSink, String hashAlgorithm,
+			Function<String, Object> parameters) throws IOException {
 		if(loaded)
 			return;
 		if(slots == null)
@@ -290,10 +290,10 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 						loadedSink.accept(trueSlot);
 					if(effectiveSlot == null)
 						safeFireSlotPurged(new StorageListener.SlotPurgedStorageEvent(this, new Slot(key),
-								fragmentCount));
+								fragmentCount, parameters));
 					else if(trueSlot != null)
 						safeFireSlotLoaded(new StorageListener.SlotLoadedStorageEvent(this, effectiveSlot,
-								fragmentCount));
+								fragmentCount, parameters));
 				}
 				if(dis.read() >= 0)
 					throw new CorruptedIndexException(indexFile, "Excess data after end of index");

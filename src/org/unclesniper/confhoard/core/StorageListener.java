@@ -1,6 +1,7 @@
 package org.unclesniper.confhoard.core;
 
 import java.io.IOException;
+import java.util.function.Function;
 
 public interface StorageListener {
 
@@ -8,12 +9,19 @@ public interface StorageListener {
 
 		private final Storage storage;
 
-		public StorageEvent(Storage storage) {
+		private final Function<String, Object> requestParameters;
+
+		public StorageEvent(Storage storage, Function<String, Object> requestParameters) {
 			this.storage = storage;
+			this.requestParameters = requestParameters;
 		}
 
 		public Storage getStorage() {
 			return storage;
+		}
+
+		public Object getRequestParameter(String key) {
+			return key == null || requestParameters == null ? null : requestParameters.apply(key);
 		}
 
 	}
@@ -24,8 +32,9 @@ public interface StorageListener {
 
 		private final int fragmentCount;
 
-		public SlotStorageEvent(Storage storage, Slot slot, int fragmentCount) {
-			super(storage);
+		public SlotStorageEvent(Storage storage, Slot slot, int fragmentCount,
+				Function<String, Object> requestParameters) {
+			super(storage, requestParameters);
 			this.slot = slot;
 			this.fragmentCount = fragmentCount;
 		}
@@ -42,16 +51,18 @@ public interface StorageListener {
 
 	public class SlotLoadedStorageEvent extends SlotStorageEvent {
 
-		public SlotLoadedStorageEvent(Storage storage, Slot slot, int fragmentCount) {
-			super(storage, slot, fragmentCount);
+		public SlotLoadedStorageEvent(Storage storage, Slot slot, int fragmentCount,
+				Function<String, Object> requestParameters) {
+			super(storage, slot, fragmentCount, requestParameters);
 		}
 
 	}
 
 	public class SlotPurgedStorageEvent extends SlotStorageEvent {
 
-		public SlotPurgedStorageEvent(Storage storage, Slot slot, int fragmentCount) {
-			super(storage, slot, fragmentCount);
+		public SlotPurgedStorageEvent(Storage storage, Slot slot, int fragmentCount,
+				Function<String, Object> requestParameters) {
+			super(storage, slot, fragmentCount, requestParameters);
 		}
 
 	}
@@ -60,8 +71,9 @@ public interface StorageListener {
 
 		private final Exception exception;
 
-		public StorageListenerFailedStorageEvent(Storage storage, Exception exception) {
-			super(storage);
+		public StorageListenerFailedStorageEvent(Storage storage, Exception exception,
+				Function<String, Object> requestParameters) {
+			super(storage, requestParameters);
 			this.exception = exception;
 		}
 
