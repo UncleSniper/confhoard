@@ -4,13 +4,30 @@ import java.io.IOException;
 import java.util.function.Function;
 import org.unclesniper.confhoard.core.Fragment;
 import org.unclesniper.confhoard.core.ConfState;
+import org.unclesniper.confhoard.core.util.Listeners;
 import org.unclesniper.confhoard.core.ConfStateBinding;
 import org.unclesniper.confhoard.core.ConfHoardException;
 import org.unclesniper.confhoard.core.security.Credentials;
 
 public abstract class AbstractConfStateReconfiguringSlotListener extends SelectingSlotListener {
 
+	private final Listeners<ConfStateReconfigurationListener> reconfigurationListeners
+			= new Listeners<ConfStateReconfigurationListener>();
+
 	public AbstractConfStateReconfiguringSlotListener() {}
+
+	public void addReconfigurationListener(ConfStateReconfigurationListener listener) {
+		reconfigurationListeners.addListener(listener);
+	}
+
+	public boolean removeReconfigurationListener(ConfStateReconfigurationListener listener) {
+		return reconfigurationListeners.removeListener(listener);
+	}
+
+	public void fireConfStateReconfigured(ConfStateReconfigurationListener.ReconfigurationEvent event)
+			throws IOException, ConfHoardException {
+		reconfigurationListeners.confFire(listener -> listener.confStateReconfigured(event), null, null);
+	}
 
 	private void reconfigure(SlotEvent event, Fragment fragment, Credentials credentials,
 			Function<String, Object> requestParameters) throws IOException, ConfHoardException {
@@ -22,7 +39,10 @@ public abstract class AbstractConfStateReconfiguringSlotListener extends Selecti
 		ConfState newState = parseConfState(event, fragment, credentials, outerState, requestParameters);
 		if(newState == null)
 			return;
+		ConfState oldState = outerState.getConfState();
 		newState.getLoadedStorage(outerState, requestParameters);
+		fireConfStateReconfigured(new ConfStateReconfigurationListener.ReconfigurationEvent(oldState, newState,
+				credentials, requestParameters));
 		outerState.setConfState(newState);
 	}
 
