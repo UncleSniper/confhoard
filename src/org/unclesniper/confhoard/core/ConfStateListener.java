@@ -10,12 +10,19 @@ public interface ConfStateListener {
 
 		private final ConfStateBinding confState;
 
-		public StateEvent(ConfStateBinding confState) {
+		private final Function<String, Object> requestParameters;
+
+		public StateEvent(ConfStateBinding confState, Function<String, Object> requestParameters) {
 			this.confState = confState;
+			this.requestParameters = requestParameters;
 		}
 
 		public ConfStateBinding getConfState() {
 			return confState;
+		}
+
+		public Object getRequestParameter(String key) {
+			return key == null || requestParameters == null ? null : requestParameters.apply(key);
 		}
 
 	}
@@ -26,14 +33,11 @@ public interface ConfStateListener {
 
 		private final Credentials credentials;
 
-		private final Function<String, Object> requestParameters;
-
 		public SlotStateEvent(ConfStateBinding confState, Slot slot, Credentials credentials,
 				Function<String, Object> requestParameters) {
-			super(confState);
+			super(confState, requestParameters);
 			this.slot = slot;
 			this.credentials = credentials;
-			this.requestParameters = requestParameters;
 		}
 
 		public Slot getSlot() {
@@ -42,10 +46,6 @@ public interface ConfStateListener {
 
 		public Credentials getCredentials() {
 			return credentials;
-		}
-
-		public Object getRequestParameter(String key) {
-			return key == null || requestParameters == null ? null : requestParameters.apply(key);
 		}
 
 	}
@@ -79,8 +79,9 @@ public interface ConfStateListener {
 
 		private final Exception exception;
 
-		public ConfStateListenerFailedStateEvent(ConfStateBinding confState, Exception exception) {
-			super(confState);
+		public ConfStateListenerFailedStateEvent(ConfStateBinding confState, Exception exception,
+				Function<String, Object> requestParameters) {
+			super(confState, requestParameters);
 			this.exception = exception;
 		}
 

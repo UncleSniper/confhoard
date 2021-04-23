@@ -262,7 +262,8 @@ public class ConfState implements ConfStateBinding {
 		}
 		catch(IOException | ConfHoardException e) {
 			safeFireConfStateListenerFailed(new
-					ConfStateListener.ConfStateListenerFailedStateEvent(event.getConfState(), e));
+					ConfStateListener.ConfStateListenerFailedStateEvent(event.getConfState(), e,
+					event::getRequestParameter));
 		}
 	}
 
@@ -272,7 +273,8 @@ public class ConfState implements ConfStateBinding {
 		}
 		catch(IOException | ConfHoardException e) {
 			safeFireConfStateListenerFailed(new
-					ConfStateListener.ConfStateListenerFailedStateEvent(event.getConfState(), e));
+					ConfStateListener.ConfStateListenerFailedStateEvent(event.getConfState(), e,
+					event::getRequestParameter));
 		}
 	}
 
