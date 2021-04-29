@@ -165,6 +165,9 @@ public class Slot {
 
 	public boolean mayPerformAction(SlotAction action, Credentials credentials) {
 		synchronized(securityConstraints) {
+			if(securityConstraints.isEmpty()) {
+				return true;
+			}
 			for(SlotSecurityConstraint constraint : securityConstraints.keySet()) {
 				if(constraint.mayPerform(this, action, credentials))
 					return true;
