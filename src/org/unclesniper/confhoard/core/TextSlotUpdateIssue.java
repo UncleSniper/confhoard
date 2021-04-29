@@ -8,6 +8,8 @@ public class TextSlotUpdateIssue implements SlotUpdateIssue {
 
 	private final List<String> lines = new LinkedList<String>();
 
+	public TextSlotUpdateIssue() {}
+
 	public TextSlotUpdateIssue(String message) {
 		if(message != null)
 			lines.add(message);
@@ -36,6 +38,21 @@ public class TextSlotUpdateIssue implements SlotUpdateIssue {
 			t = t.getCause();
 			cause = true;
 		} while(t != null);
+	}
+
+	public void addLine(String line) {
+		if(line == null)
+			throw new IllegalArgumentException("Line cannot be null");
+		lines.add(line);
+	}
+
+	public void addLines(Iterable<String> lines) {
+		if(lines == null)
+			throw new IllegalArgumentException("Line sequence cannot be null");
+		for(String line : lines) {
+			if(line != null)
+				this.lines.add(line);
+		}
 	}
 
 	@Override
