@@ -37,7 +37,7 @@ public abstract class VirtualSlot extends Slot {
 		}
 
 		@Override
-		public void remove() {}
+		public void remove(Credentials credentials, ConfStateBinding state, Function<String, Object> parameters) {}
 
 		@Override
 		public String getHashAlgorithm() {

@@ -12,7 +12,8 @@ public interface Fragment {
 	InputStream retrieve(Credentials credentials, ConfStateBinding state, Function<String, Object> parameters)
 			throws IOException;
 
-	void remove() throws IOException;
+	void remove(Credentials credentials, ConfStateBinding state, Function<String, Object> parameters)
+			throws IOException;
 
 	String getHashAlgorithm();
 

@@ -69,7 +69,8 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 		}
 
 		@Override
-		public void remove() throws IOException {
+		public void remove(Credentials credentials, ConfStateBinding confState,
+				Function<String, Object> parameters) throws IOException {
 			synchronized(getLocalLock()) {
 				File file = new File(directory, id + ".frag");
 				if(file.exists())
@@ -80,7 +81,7 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 					state.removeFragment(this);
 				if(slot.getFragment() == this)
 					slot.setFragment(null);
-				saveIndex();
+				saveIndex(credentials, confState, parameters);
 			}
 		}
 
@@ -115,8 +116,9 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 		public FSSlotStorageListener() {}
 
 		@Override
-		public void saveSlot() throws IOException {
-			saveIndex();
+		public void saveSlot(Credentials credentials, ConfStateBinding state, Function<String, Object> parameters)
+				throws IOException {
+			saveIndex(credentials, state, parameters);
 		}
 
 	}
@@ -126,8 +128,12 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 		private final File indexFile;
 
 		public CorruptedIndexException(File indexFile, String message) {
+			this(indexFile, message, null);
+		}
+
+		public CorruptedIndexException(File indexFile, String message, Throwable cause) {
 			super("Index file '" + indexFile.getPath() + "' is corrupted"
-					+ (message == null || message.length() == 0 ? "" : ": " + message));
+					+ (message == null || message.length() == 0 ? "" : ": " + message), cause);
 			this.indexFile = indexFile;
 		}
 
@@ -152,6 +158,8 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 	private boolean purgeOnLoad = true;
 
 	private final SlotStorageListener slotStorageListener = new FSSlotStorageListener();
+
+	private String currentHashAlgorithm;
 
 	public FileSystemStorage() {}
 
@@ -195,6 +203,7 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 		synchronized(getLocalLock()) {
 			if(loaded)
 				return;
+			currentHashAlgorithm = hashAlgorithm;
 			File indexFile = new File(directory, "index");
 			if(!indexFile.exists()) {
 				File newIndex = new File(directory, "index.new");
@@ -299,13 +308,13 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 					throw new CorruptedIndexException(indexFile, "Excess data after end of index");
 			}
 			catch(EOFException ee) {
-				throw new CorruptedIndexException(indexFile, "Unexpected end of file");
+				throw new CorruptedIndexException(indexFile, "Unexpected end of file", ee);
 			}
 			catch(UTFDataFormatException udfe) {
 				if(slotIndex < 0)
-					throw new CorruptedIndexException(indexFile, "Malencoded hash algorithm name");
+					throw new CorruptedIndexException(indexFile, "Malencoded hash algorithm name", udfe);
 				else
-					throw new CorruptedIndexException(indexFile, "Malencoded slot key for slot #" + slotIndex);
+					throw new CorruptedIndexException(indexFile, "Malencoded slot key for slot #" + slotIndex, udfe);
 			}
 			loaded = true;
 		}
@@ -325,7 +334,8 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 	}
 
 	@Override
-	public Fragment newFragment(Slot slot, InputStream content, String hashAlgorithm) throws IOException {
+	public Fragment newFragment(Slot slot, InputStream content, String hashAlgorithm, Credentials credentials,
+			ConfStateBinding confState, Function<String, Object> parameters) throws IOException {
 		if(slot == null)
 			throw new IllegalArgumentException("Slot cannot be null");
 		if(content == null)
@@ -365,16 +375,18 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 			FSFragment fragment = new FSFragment(slot, nextFragmentID, hashAlgorithm, hashBuffer);
 			state.addFragment(fragment);
 			++nextFragmentID;
-			saveIndex();
+			saveIndex(credentials, confState, parameters);
 			return fragment;
 		}
 	}
 
-	private void saveIndex() throws IOException {
+	private void saveIndex(Credentials credentials, ConfStateBinding confState, Function<String, Object> parameters)
+			throws IOException {
 		synchronized(getLocalLock()) {
 			File newFile = new File(directory, "index.new");
 			try(FileOutputStream fos = new FileOutputStream(newFile)) {
 				DataOutputStream dos = new DataOutputStream(fos);
+				dos.writeUTF(currentHashAlgorithm);
 				dos.writeInt(slotStates.size());
 				for(Map.Entry<Slot, FSSlotState> slotEntry : slotStates.entrySet()) {
 					Slot slot = slotEntry.getKey();
@@ -384,9 +396,18 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 					Set<FSFragment> all = state.getFragments();
 					dos.writeInt(all.size() + (active != null && all.contains(active) ? 0 : 1));
 					dos.writeLong(active == null ? -1L : active.getID());
+					byte[] activeHash = active == null ? null : active.getHash(currentHashAlgorithm, credentials,
+							confState, parameters);
+					dos.writeInt(activeHash == null ? 0 : activeHash.length);
+					if(activeHash != null)
+						dos.write(activeHash);
 					for(FSFragment fragment : all) {
-						if(fragment != active)
-							dos.writeLong(fragment.getID());
+						if(fragment == active)
+							continue;
+						dos.writeLong(fragment.getID());
+						byte[] hash = fragment.getHash(currentHashAlgorithm, credentials, confState, parameters);
+						dos.writeInt(hash.length);
+						dos.write(hash);
 					}
 				}
 				dos.flush();

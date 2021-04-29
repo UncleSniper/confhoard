@@ -4,6 +4,7 @@ import java.util.Map;
 import java.io.IOException;
 import java.util.IdentityHashMap;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.unclesniper.confhoard.core.util.Listeners;
 import org.unclesniper.confhoard.core.security.SlotAction;
 import org.unclesniper.confhoard.core.security.Credentials;
@@ -142,10 +143,11 @@ public class Slot {
 		}
 	}
 
-	public void fireFragmentUpdated() throws IOException {
+	public void fireFragmentUpdated(Credentials credentials, ConfStateBinding state,
+			Function<String, Object> parameters) throws IOException {
 		synchronized(storageListeners) {
 			for(SlotStorageListener listener : storageListeners.keySet())
-				listener.saveSlot();
+				listener.saveSlot(credentials, state, parameters);
 		}
 	}
 
