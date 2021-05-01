@@ -358,7 +358,7 @@ public class ConfState implements ConfStateBinding {
 		if(slot == null)
 			throw new IllegalArgumentException("Slot cannot be null");
 		if(slots.get(slot.getKey()) != slot)
-			throw new IllegalArgumentException("Slot does now belong to this ConfState");
+			throw new IllegalArgumentException("Slot does not belong to this ConfState");
 		return slot;
 	}
 
