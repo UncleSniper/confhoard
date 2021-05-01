@@ -3,6 +3,9 @@ package org.unclesniper.confhoard.core.util;
 import java.io.InputStream;
 import java.io.IOException;
 import java.security.MessageDigest;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import org.unclesniper.confhoard.core.Doom;
 import java.security.NoSuchAlgorithmException;
 
 public class HashUtils {
@@ -29,6 +32,18 @@ public class HashUtils {
 			md.update(buffer, 0, count);
 		}
 		return md.digest();
+	}
+
+	public static byte[] hashString(String str, String hashAlgorithm) {
+		if(str == null)
+			throw new IllegalArgumentException("String cannot be null");
+		byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+		try {
+			return HashUtils.hashStream(new ByteArrayInputStream(bytes), hashAlgorithm);
+		}
+		catch(IOException ioe) {
+			throw new Doom("ByteArrayInputStream threw IOException!? What gives!?");
+		}
 	}
 
 }
