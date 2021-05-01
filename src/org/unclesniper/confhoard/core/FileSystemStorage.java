@@ -22,7 +22,7 @@ import org.unclesniper.confhoard.core.util.IOSink;
 import org.unclesniper.confhoard.core.util.HashUtils;
 import org.unclesniper.confhoard.core.security.Credentials;
 
-public class FileSystemStorage extends AbstractStorage implements Storage {
+public class FileSystemStorage extends AbstractStorage {
 
 	/* struct Index {
 	 *   String hashAlgorithm;
@@ -40,6 +40,44 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 	 *   byte hash[hashLength];
 	 * }
 	 */
+
+	public static class CorruptedIndexException extends IOException {
+
+		private final File indexFile;
+
+		public CorruptedIndexException(File indexFile, String message) {
+			this(indexFile, message, null);
+		}
+
+		public CorruptedIndexException(File indexFile, String message, Throwable cause) {
+			super("Index file '" + indexFile.getPath() + "' is corrupted"
+					+ (message == null || message.length() == 0 ? "" : ": " + message), cause);
+			this.indexFile = indexFile;
+		}
+
+		public File getIndexFile() {
+			return indexFile;
+		}
+
+	}
+
+	public interface IndexSink {
+
+		void enterIndex() throws IOException;
+
+		void foundHashAlgorithm(String hashAlgorithm) throws IOException;
+
+		void foundSlotCount(int slotCount) throws IOException;
+
+		void enterSlot(int slotIndex, int slotCount, String key, int fragmentCount) throws IOException;
+
+		void foundFragment(int fragmentIndex, int fragmentCount, long id, byte[] hash) throws IOException;
+
+		void leaveSlot(int slotIndex, int slotCount, String key, int fragmentCount) throws IOException;
+
+		void leaveIndex(long nextID) throws IOException;
+
+	}
 
 	private class FSFragment extends AbstractFragment {
 
@@ -85,6 +123,19 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 			}
 		}
 
+		@Override
+		public String toString() {
+			StringBuilder builder = new StringBuilder();
+			builder.append("<FSFragment slot=\"");
+			builder.append(getSlot().getKey());
+			builder.append("\" directory=\"");
+			builder.append(directory.getAbsolutePath());
+			builder.append("\" id=");
+			builder.append(String.valueOf(id));
+			builder.append('>');
+			return builder.toString();
+		}
+
 	}
 
 	private class FSSlotState {
@@ -123,22 +174,105 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 
 	}
 
-	public static class CorruptedIndexException extends IOException {
+	private class LoadingIndexSink implements IndexSink {
 
-		private final File indexFile;
+		private final Function<String, Slot> slots;
 
-		public CorruptedIndexException(File indexFile, String message) {
-			this(indexFile, message, null);
+		private final Consumer<Slot> loadedSink;
+
+		private final String hashAlgorithm;
+
+		private final Function<String, Object> parameters;
+
+		private boolean sameHashAlgorithm;
+
+		private String slotKey;
+
+		private Slot trueSlot;
+
+		private Slot effectiveSlot;
+
+		private FSSlotState state;
+
+		public LoadingIndexSink(Function<String, Slot> slots, Consumer<Slot> loadedSink, String hashAlgorithm,
+				Function<String, Object> parameters) {
+			this.slots = slots;
+			this.loadedSink = loadedSink;
+			this.hashAlgorithm = hashAlgorithm;
+			this.parameters = parameters;
 		}
 
-		public CorruptedIndexException(File indexFile, String message, Throwable cause) {
-			super("Index file '" + indexFile.getPath() + "' is corrupted"
-					+ (message == null || message.length() == 0 ? "" : ": " + message), cause);
-			this.indexFile = indexFile;
+		@Override
+		public void enterIndex() {}
+
+		@Override
+		public void foundHashAlgorithm(String indexHashAlgorithm) {
+			sameHashAlgorithm = indexHashAlgorithm.equals(hashAlgorithm);
 		}
 
-		public File getIndexFile() {
-			return indexFile;
+		@Override
+		public void foundSlotCount(int slotCount) {}
+
+		@Override
+		public void enterSlot(int slotIndex, int slotCount, String key, int fragmentCount) {
+			slotKey = key;
+			trueSlot = slots.apply(key);
+			if(trueSlot != null)
+				effectiveSlot = trueSlot;
+			else if(purgeOnLoad)
+				effectiveSlot = null;
+			else
+				effectiveSlot = new Slot(key);
+			if(effectiveSlot == null)
+				state = null;
+			else {
+				state = slotStates.get(effectiveSlot);
+				if(state == null) {
+					state = new FSSlotState();
+					slotStates.put(effectiveSlot, state);
+					if(effectiveSlot == trueSlot)
+						effectiveSlot.addStorageListener(slotStorageListener);
+				}
+			}
+		}
+
+		@Override
+		public void foundFragment(int fragmentIndex, int fragmentCount, long id, byte[] hash) throws IOException {
+			if(id == -1L) {
+				if(effectiveSlot != null)
+					effectiveSlot.setFragment(null);
+			}
+			else if(effectiveSlot != null) {
+				ensureFragmentExists(id);
+				if(hash == null || !sameHashAlgorithm)
+					hash = hashFragment(id, hashAlgorithm);
+				FSFragment fragment = new FSFragment(effectiveSlot, id, hashAlgorithm, hash);
+				state.addFragment(fragment);
+				if(fragmentIndex == 0)
+					effectiveSlot.setFragment(fragment);
+			}
+			else {
+				File file = new File(directory, id + ".frag");
+				if(file.exists())
+					Files.delete(file.toPath());
+			}
+		}
+
+		@Override
+		public void leaveSlot(int slotIndex, int slotCount, String key, int fragmentCount) {
+			if(trueSlot != null && loadedSink != null)
+				loadedSink.accept(trueSlot);
+			if(effectiveSlot == null)
+				safeFireSlotPurged(new StorageListener.SlotPurgedStorageEvent(FileSystemStorage.this,
+						new Slot(slotKey), fragmentCount, parameters));
+			else if(trueSlot != null)
+				safeFireSlotLoaded(new StorageListener.SlotLoadedStorageEvent(FileSystemStorage.this,
+						effectiveSlot, fragmentCount, parameters));
+		}
+
+		@Override
+		public void leaveIndex(long nextID) {
+			nextFragmentID = nextID;
 		}
 
 	}
@@ -216,105 +350,9 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 			for(Slot oldSlot : slotStates.keySet())
 				oldSlot.removeStorageListener(slotStorageListener);
 			slotStates.clear();
-			int slotIndex = -1;
-			Set<String> seenKeys = new HashSet<String>();
-			long nextID = 0L;
 			try(FileInputStream fis = new FileInputStream(indexFile)) {
-				DataInputStream dis = new DataInputStream(fis);
-				String indexHashAlgorithm = dis.readUTF();
-				boolean sameHashAlgorithm = indexHashAlgorithm.equals(hashAlgorithm);
-				int slotCount = dis.readInt();
-				if(slotCount < 0)
-					throw new CorruptedIndexException(indexFile, "Slot count is negative: " + slotCount);
-				for(slotIndex = 0; slotIndex < slotCount; ++slotIndex) {
-					String key = dis.readUTF();
-					if(seenKeys.contains(key))
-						throw new CorruptedIndexException(indexFile, "Duplicate slot key: " + key);
-					seenKeys.add(key);
-					Slot trueSlot = slots.apply(key);
-					Slot effectiveSlot;
-					if(trueSlot != null)
-						effectiveSlot = trueSlot;
-					else if(purgeOnLoad)
-						effectiveSlot = null;
-					else
-						effectiveSlot = new Slot(key);
-					FSSlotState state;
-					if(effectiveSlot == null)
-						state = null;
-					else {
-						state = slotStates.get(effectiveSlot);
-						if(state == null) {
-							state = new FSSlotState();
-							slotStates.put(effectiveSlot, state);
-							if(effectiveSlot == trueSlot)
-								effectiveSlot.addStorageListener(slotStorageListener);
-						}
-					}
-					int fragmentCount = dis.readInt();
-					if(fragmentCount < 0)
-						throw new CorruptedIndexException(indexFile, "Fragment count is negative for slot #"
-								+ slotIndex + ": " + fragmentCount);
-					for(int fragmentIndex = 0; fragmentIndex < fragmentCount; ++fragmentIndex) {
-						long id = dis.readLong();
-						if(id < (fragmentIndex == 0 ? -1L : 0L))
-							throw new CorruptedIndexException(indexFile, "Fragment ID is negative for slot '"
-									+ key + "' fragment #" + fragmentIndex + ": " + id);
-						int hashLength = dis.readInt();
-						if(hashLength < 0)
-							throw new CorruptedIndexException(indexFile, "Hash length is negative for slot '"
-									+ key + "' fragment #" + fragmentIndex + ": " + hashLength);
-						byte[] hashBuffer = hashLength == 0 ? null : new byte[hashLength];
-						if(hashBuffer != null) {
-							int hashOffset = 0;
-							while(hashOffset < hashBuffer.length) {
-								int count = dis.read(hashBuffer, hashOffset, hashBuffer.length - hashOffset);
-								if(count <= 0)
-									throw new EOFException();
-								hashOffset += count;
-							}
-						}
-						if(id == -1L) {
-							if(effectiveSlot != null)
-								effectiveSlot.setFragment(null);
-						}
-						else if(effectiveSlot != null) {
-							ensureFragmentExists(id);
-							if(hashBuffer == null || !sameHashAlgorithm)
-								hashBuffer = hashFragment(id, hashAlgorithm);
-							FSFragment fragment = new FSFragment(effectiveSlot, id, hashAlgorithm, hashBuffer);
-							if(id >= nextID)
-								nextID = id + 1L;
-							state.addFragment(fragment);
-							if(fragmentIndex == 0)
-								effectiveSlot.setFragment(fragment);
-						}
-						else {
-							File file = new File(directory, id + ".frag");
-							if(file.exists())
-								Files.delete(file.toPath());
-						}
-					}
-					if(trueSlot != null && loadedSink != null)
-						loadedSink.accept(trueSlot);
-					if(effectiveSlot == null)
-						safeFireSlotPurged(new StorageListener.SlotPurgedStorageEvent(this, new Slot(key),
-								fragmentCount, parameters));
-					else if(trueSlot != null)
-						safeFireSlotLoaded(new StorageListener.SlotLoadedStorageEvent(this, effectiveSlot,
-								fragmentCount, parameters));
-				}
-				if(dis.read() >= 0)
-					throw new CorruptedIndexException(indexFile, "Excess data after end of index");
-			}
-			catch(EOFException ee) {
-				throw new CorruptedIndexException(indexFile, "Unexpected end of file", ee);
-			}
-			catch(UTFDataFormatException udfe) {
-				if(slotIndex < 0)
-					throw new CorruptedIndexException(indexFile, "Malencoded hash algorithm name", udfe);
-				else
-					throw new CorruptedIndexException(indexFile, "Malencoded slot key for slot #" + slotIndex, udfe);
+				FileSystemStorage.readIndex(indexFile, fis, new LoadingIndexSink(slots, loadedSink,
+						hashAlgorithm, parameters));
 			}
 			loaded = true;
 		}
@@ -356,6 +394,7 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 							break;
 						innerFOS.write(buffer, 0, count);
 					}
+					innerFOS.getChannel().force(false);
 				}
 			}
 			catch(IOException ioe) {
@@ -444,6 +483,87 @@ public class FileSystemStorage extends AbstractStorage implements Storage {
 			}
 			return lock;
 		}
+	}
+
+	public static void readIndex(File indexFile, InputStream stream, IndexSink sink) throws IOException {
+		if(indexFile == null)
+			throw new IllegalStateException("Index file cannot be null");
+		if(stream == null)
+			throw new IllegalArgumentException("Stream cannot be null");
+		if(sink == null)
+			throw new IllegalArgumentException("Index sink cannot be null");
+		DataInputStream dis = new DataInputStream(stream);
+		boolean userCode = false;
+		int slotIndex = -1;
+		Set<String> seenKeys = new HashSet<String>();
+		long nextID = 0L;
+		sink.enterIndex();
+		try {
+			String indexHashAlgorithm = dis.readUTF();
+			userCode = true;
+			sink.foundHashAlgorithm(indexHashAlgorithm);
+			userCode = false;
+			int slotCount = dis.readInt();
+			if(slotCount < 0)
+				throw new CorruptedIndexException(indexFile, "Slot count is negative: " + slotCount);
+			for(slotIndex = 0; slotIndex < slotCount; ++slotIndex) {
+				String key = dis.readUTF();
+				if(seenKeys.contains(key))
+					throw new CorruptedIndexException(indexFile, "Duplicate slot key: " + key);
+				seenKeys.add(key);
+				int fragmentCount = dis.readInt();
+				if(fragmentCount < 0)
+					throw new CorruptedIndexException(indexFile, "Fragment count is negative for slot #"
+							+ slotIndex + ": " + fragmentCount);
+				userCode = true;
+				sink.enterSlot(slotIndex, slotCount, key, fragmentCount);
+				userCode = false;
+				for(int fragmentIndex = 0; fragmentIndex < fragmentCount; ++fragmentIndex) {
+					long id = dis.readLong();
+					if(id < (fragmentIndex == 0 ? -1L : 0L))
+						throw new CorruptedIndexException(indexFile, "Fragment ID is negative for slot '"
+								+ key + "' fragment #" + fragmentIndex + ": " + id);
+					if(id >= nextID)
+						nextID = id + 1L;
+					int hashLength = dis.readInt();
+					if(hashLength < 0)
+						throw new CorruptedIndexException(indexFile, "Hash length is negative for slot '"
+								+ key + "' fragment #" + fragmentIndex + ": " + hashLength);
+					byte[] hashBuffer = hashLength == 0 ? null : new byte[hashLength];
+					if(hashBuffer != null) {
+						int hashOffset = 0;
+						while(hashOffset < hashBuffer.length) {
+							int count = dis.read(hashBuffer, hashOffset, hashBuffer.length - hashOffset);
+							if(count <= 0)
+								throw new EOFException();
+							hashOffset += count;
+						}
+					}
+					userCode = true;
+					sink.foundFragment(fragmentIndex, fragmentCount, id, hashBuffer);
+					userCode = false;
+				}
+				userCode = true;
+				sink.leaveSlot(slotIndex, slotCount, key, fragmentCount);
+				userCode = false;
+			}
+			if(dis.read() >= 0)
+				throw new CorruptedIndexException(indexFile, "Excess data after end of index");
+		}
+		catch(EOFException ee) {
+			if(userCode)
+				throw ee;
+			throw new CorruptedIndexException(indexFile, "Unexpected end of file", ee);
+		}
+		catch(UTFDataFormatException udfe) {
+			if(userCode)
+				throw udfe;
+			if(slotIndex < 0)
+				throw new CorruptedIndexException(indexFile, "Malencoded hash algorithm name", udfe);
+			else
+				throw new CorruptedIndexException(indexFile, "Malencoded slot key for slot #" + slotIndex, udfe);
+		}
+		sink.leaveIndex(nextID);
 	}
 
 }
