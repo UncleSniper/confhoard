@@ -15,6 +15,7 @@ import java.util.function.Function;
 import org.unclesniper.confhoard.core.util.HoardSink;
 import org.unclesniper.confhoard.core.util.Listeners;
 import org.unclesniper.confhoard.core.security.SlotAction;
+import org.unclesniper.confhoard.core.util.FragmentHolder;
 import org.unclesniper.confhoard.core.security.Credentials;
 
 public class ConfState implements ConfStateBinding {
@@ -188,34 +189,37 @@ public class ConfState implements ConfStateBinding {
 		Fragment newFragment = getLoadedStorage(innerState, parameters).newFragment(slot, content,
 				hashAlgorithm, credentials, innerState, parameters);
 		Fragment oldFragment = slot.getFragment();
-		String hashAlgorithm = innerState.getHashAlgorithm();
-		if(oldFragment != null
-				&& compareHashes(oldFragment, newFragment, hashAlgorithm, credentials, innerState, parameters)) {
-			newFragment.remove(credentials, innerState, parameters);
-			return null;
+		try(FragmentHolder newHolder = new FragmentHolder(newFragment, credentials, innerState, parameters)) {
+			String hashAlgorithm = innerState.getHashAlgorithm();
+			if(oldFragment != null
+					&& compareHashes(oldFragment, newFragment, hashAlgorithm, credentials, innerState, parameters)) {
+				newFragment.remove(credentials, innerState, parameters);
+				return null;
+			}
+			List<SlotListener> fired = new LinkedList<SlotListener>();
+			SlotListener.SlotUpdatedEvent event = new SlotListener.SlotUpdatedEvent(slot, credentials,
+					innerState, oldFragment, newFragment, parameters);
+			boolean setFragmentTook = false;
+			try {
+				slot.fireSlotUpdated(event, fired::add);
+				slot.setFragment(newFragment);
+				slot.fireFragmentUpdated(credentials, innerState, parameters);
+				setFragmentTook = true;
+			}
+			catch(RuntimeException | IOException | ConfHoardException e) {
+				return slotUpdateFailed(slot, oldFragment, newFragment, event, fired, e);
+			}
+			finally {
+				if(!setFragmentTook)
+					slot.setFragment(oldFragment);
+			}
+			if(event.shouldRollback())
+				return slotUpdateFailed(slot, oldFragment, newFragment, event, fired, null);
+			safeFireSlotUpdateSucceeded(new ConfStateListener.SlotUpdateSucceededStateEvent(innerState, slot,
+					credentials, parameters));
+			newHolder.release();
+			return newFragment;
 		}
-		List<SlotListener> fired = new LinkedList<SlotListener>();
-		SlotListener.SlotUpdatedEvent event = new SlotListener.SlotUpdatedEvent(slot, credentials,
-				innerState, oldFragment, newFragment, parameters);
-		boolean setFragmentTook = false;
-		try {
-			slot.fireSlotUpdated(event, fired::add);
-			slot.setFragment(newFragment);
-			slot.fireFragmentUpdated(credentials, innerState, parameters);
-			setFragmentTook = true;
-		}
-		catch(RuntimeException | IOException | ConfHoardException e) {
-			return slotUpdateFailed(slot, oldFragment, newFragment, event, fired, e);
-		}
-		finally {
-			if(!setFragmentTook)
-				slot.setFragment(oldFragment);
-		}
-		if(event.shouldRollback())
-			return slotUpdateFailed(slot, oldFragment, newFragment, event, fired, null);
-		safeFireSlotUpdateSucceeded(new ConfStateListener.SlotUpdateSucceededStateEvent(innerState, slot,
-				credentials, parameters));
-		return newFragment;
 	}
 
 	private Fragment slotUpdateFailed(Slot slot, Fragment oldFragment, Fragment newFragment,
