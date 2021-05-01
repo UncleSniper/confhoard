@@ -37,7 +37,22 @@ public class HashUtils {
 	public static byte[] hashString(String str, String hashAlgorithm) {
 		if(str == null)
 			throw new IllegalArgumentException("String cannot be null");
+		if(hashAlgorithm == null)
+			throw new IllegalArgumentException("Hash algorithm cannot be null");
 		byte[] bytes = str.getBytes(StandardCharsets.UTF_8);
+		try {
+			return HashUtils.hashStream(new ByteArrayInputStream(bytes), hashAlgorithm);
+		}
+		catch(IOException ioe) {
+			throw new Doom("ByteArrayInputStream threw IOException!? What gives!?");
+		}
+	}
+
+	public static byte[] hashBytes(byte[] bytes, String hashAlgorithm) {
+		if(bytes == null)
+			throw new IllegalArgumentException("Bytes cannot be null");
+		if(hashAlgorithm == null)
+			throw new IllegalArgumentException("Hash algorithm cannot be null");
 		try {
 			return HashUtils.hashStream(new ByteArrayInputStream(bytes), hashAlgorithm);
 		}
