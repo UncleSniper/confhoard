@@ -33,8 +33,6 @@ public class GroupSlotSecurityConstraint extends AbstractSlotSecurityConstraint 
 
 	@Override
 	protected boolean mayPerformAnyAction(Slot slot, Credentials credentials) {
-		if(credentials == null)
-			throw new IllegalArgumentException("Credentials cannot be null");
 		if(!(credentials instanceof GroupBearingCredentials))
 			return false;
 		GroupBearingCredentials gbc = (GroupBearingCredentials)credentials;

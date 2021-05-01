@@ -61,8 +61,6 @@ public class UserSlotSecurityConstraint extends AbstractSlotSecurityConstraint {
 
 	@Override
 	protected boolean mayPerformAnyAction(Slot slot, Credentials credentials) {
-		if(credentials == null)
-			throw new IllegalArgumentException("Credentials cannot be null");
 		if(!(credentials instanceof UserBearingCredentials))
 			return false;
 		UserBearingCredentials ubc = (UserBearingCredentials)credentials;
