@@ -26,7 +26,7 @@ public class HexUtils {
 		for(int i = -(length % 2); i < length; i += 2) {
 			char hi = i < 0 ? '0' : str.charAt(i);
 			char lo = str.charAt(i + 1);
-			bytes[(i + 1) / 2] = (byte)((hi << 4) | lo);
+			bytes[(i + 1) / 2] = (byte)((HexUtils.decodeHexDigit(hi) << 4) | HexUtils.decodeHexDigit(lo));
 		}
 		return bytes;
 	}
