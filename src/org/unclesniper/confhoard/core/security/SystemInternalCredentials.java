@@ -6,4 +6,9 @@ public class SystemInternalCredentials implements EverythingIsAllowedCredentials
 
 	public SystemInternalCredentials() {}
 
+	@Override
+	public String toString() {
+		return "system";
+	}
+
 }

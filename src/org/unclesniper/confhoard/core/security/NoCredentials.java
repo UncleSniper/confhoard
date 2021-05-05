@@ -6,4 +6,9 @@ public class NoCredentials implements Credentials {
 
 	public NoCredentials() {}
 
+	@Override
+	public String toString() {
+		return "nobody";
+	}
+
 }
