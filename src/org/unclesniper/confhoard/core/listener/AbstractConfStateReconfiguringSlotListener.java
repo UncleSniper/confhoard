@@ -29,35 +29,35 @@ public abstract class AbstractConfStateReconfiguringSlotListener extends Selecti
 		reconfigurationListeners.confFire(listener -> listener.confStateReconfigured(event), null, null);
 	}
 
-	private void reconfigure(SlotEvent event, Fragment fragment, Credentials credentials,
-			Function<String, Object> requestParameters) throws IOException, ConfHoardException {
+	private void reconfigure(SlotEvent event, Fragment fragment) throws IOException, ConfHoardException {
 		ConfStateBinding outerState = event.getConfState();
 		if(outerState == null)
 			throw new IllegalArgumentException("No ConfStateBinding configured");
 		if(fragment == null)
 			return;
-		ConfState newState = parseConfState(event, fragment, credentials, outerState, requestParameters);
+		Credentials credentials = event.getCredentials();
+		Function<String, Object> requestParameters = event::getRequestParameter;
+		ConfState newState = parseConfState(event, fragment, outerState);
 		if(newState == null)
 			return;
 		ConfState oldState = outerState.getConfState();
-		newState.getLoadedStorage(outerState, requestParameters);
+		newState.getLoadedStorage(credentials, outerState, requestParameters);
 		fireConfStateReconfigured(new ConfStateReconfigurationListener.ReconfigurationEvent(oldState, newState,
 				credentials, requestParameters));
 		outerState.setConfState(newState);
 	}
 
-	protected abstract ConfState parseConfState(SlotEvent event, Fragment fragment, Credentials credentials,
-			ConfStateBinding state, Function<String, Object> requestParameters)
+	protected abstract ConfState parseConfState(SlotEvent event, Fragment fragment, ConfStateBinding state)
 			throws IOException, ConfHoardException;
 
 	@Override
 	protected void selectedSlotLoaded(SlotLoadedEvent event) throws IOException, ConfHoardException {
-		reconfigure(event, event.getSlot().getFragment(), null, null);
+		reconfigure(event, event.getSlot().getFragment());
 	}
 
 	@Override
 	protected void selectedSlotUpdated(SlotUpdatedEvent event) throws IOException, ConfHoardException {
-		reconfigure(event, event.getNextFragment(), event.getCredentials(), event::getRequestParameter);
+		reconfigure(event, event.getNextFragment());
 	}
 
 }

@@ -72,8 +72,8 @@ public class ConfState implements ConfStateBinding {
 		this.hashAlgorithm = hashAlgorithm;
 	}
 
-	public Storage getLoadedStorage(ConfStateBinding outerState, Function<String, Object> parameters)
-			throws IOException, ConfHoardException {
+	public Storage getLoadedStorage(Credentials credentials, ConfStateBinding outerState,
+			Function<String, Object> parameters) throws IOException, ConfHoardException {
 		if(storage == null)
 			throw new IllegalStateException("No storage backend is configured");
 		if(!fragmentsLoaded) {
@@ -82,7 +82,7 @@ public class ConfState implements ConfStateBinding {
 			fragmentsLoaded = true;
 			for(Slot slot : loadedSlots)
 				slot.fireSlotLoaded(new SlotListener.SlotLoadedEvent(slot,
-						outerState == null ? this : outerState), null);
+						outerState == null ? this : outerState, parameters), null);
 		}
 		return storage;
 	}
@@ -186,7 +186,7 @@ public class ConfState implements ConfStateBinding {
 		if(enforceAccess && !slot.mayPerformAction(SlotAction.UPDATE, credentials))
 			throw new SlotAccessForbiddenException(slot, SlotAction.UPDATE);
 		ConfStateBinding innerState = outerState == null ? this : outerState;
-		Fragment newFragment = getLoadedStorage(innerState, parameters).newFragment(slot, content,
+		Fragment newFragment = getLoadedStorage(credentials, innerState, parameters).newFragment(slot, content,
 				hashAlgorithm, credentials, innerState, parameters);
 		Fragment oldFragment = slot.getFragment();
 		try(FragmentHolder newHolder = new FragmentHolder(newFragment, credentials, innerState, parameters)) {

@@ -15,9 +15,12 @@ public interface SlotListener {
 
 		private final ConfStateBinding confState;
 
-		public SlotEvent(Slot slot, ConfStateBinding confState) {
+		private final Function<String, Object> requestParameters;
+
+		public SlotEvent(Slot slot, ConfStateBinding confState, Function<String, Object> requestParameters) {
 			this.slot = slot;
 			this.confState = confState;
+			this.requestParameters = requestParameters;
 		}
 
 		public Slot getSlot() {
@@ -28,14 +31,18 @@ public interface SlotListener {
 			return confState;
 		}
 
+		public Object getRequestParameter(String key) {
+			return key == null || requestParameters == null ? null : requestParameters.apply(key);
+		}
+
 		public abstract Credentials getCredentials();
 
 	}
 
 	public class SlotLoadedEvent extends SlotEvent {
 
-		public SlotLoadedEvent(Slot slot, ConfStateBinding confState) {
-			super(slot, confState);
+		public SlotLoadedEvent(Slot slot, ConfStateBinding confState, Function<String, Object> requestParameters) {
+			super(slot, confState, requestParameters);
 		}
 
 		@Override
@@ -55,17 +62,14 @@ public interface SlotListener {
 
 		private boolean rollbackUpdate;
 
-		private final Function<String, Object> requestParameters;
-
 		private final Credentials credentials;
 
 		public SlotUpdatedEvent(Slot slot, Credentials credentials, ConfStateBinding confState,
 				Fragment previousFragment, Fragment nextFragment, Function<String, Object> requestParameters) {
-			super(slot, confState);
+			super(slot, confState, requestParameters);
 			this.credentials = credentials;
 			this.previousFragment = previousFragment;
 			this.nextFragment = nextFragment;
-			this.requestParameters = requestParameters;
 		}
 
 		public Fragment getPreviousFragment() {
@@ -96,10 +100,6 @@ public interface SlotListener {
 
 		public boolean shouldRollback() {
 			return rollbackUpdate;
-		}
-
-		public Object getRequestParameter(String key) {
-			return key == null || requestParameters == null ? null : requestParameters.apply(key);
 		}
 
 		@Override
