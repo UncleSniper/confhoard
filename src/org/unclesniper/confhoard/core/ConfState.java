@@ -218,6 +218,8 @@ public class ConfState implements ConfStateBinding {
 			safeFireSlotUpdateSucceeded(new ConfStateListener.SlotUpdateSucceededStateEvent(innerState, slot,
 					credentials, parameters));
 			newHolder.release();
+			if(oldFragment != null)
+				oldFragment.remove(credentials, innerState, parameters);
 			return newFragment;
 		}
 	}
