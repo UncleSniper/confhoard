@@ -32,6 +32,10 @@ public class Slot {
 
 	private boolean skipOnRollback = true;
 
+	private boolean assignFragmentAhead;
+
+	private boolean ignoreOldFragmentOnSave;
+
 	public Slot(String key) {
 		this(key, null);
 	}
@@ -108,6 +112,22 @@ public class Slot {
 		this.skipOnRollback = skipOnRollback;
 	}
 
+	public boolean isAssignFragmentAhead() {
+		return assignFragmentAhead;
+	}
+
+	public void setAssignFragmentAhead(boolean assignFragmentAhead) {
+		this.assignFragmentAhead = assignFragmentAhead;
+	}
+
+	public boolean isIgnoreOldFragmentOnSave() {
+		return ignoreOldFragmentOnSave;
+	}
+
+	public void setIgnoreOldFragmentOnSave(boolean ignoreOldFragmentOnSave) {
+		this.ignoreOldFragmentOnSave = ignoreOldFragmentOnSave;
+	}
+
 	public void addSlotListener(SlotListener listener) {
 		slotListeners.addListener(listener);
 	}
@@ -144,10 +164,10 @@ public class Slot {
 	}
 
 	public void fireFragmentUpdated(Credentials credentials, ConfStateBinding state,
-			Function<String, Object> parameters) throws IOException {
+			Function<String, Object> parameters, Fragment ignore) throws IOException {
 		synchronized(storageListeners) {
 			for(SlotStorageListener listener : storageListeners.keySet())
-				listener.saveSlot(credentials, state, parameters);
+				listener.saveSlot(credentials, state, parameters, ignore);
 		}
 	}
 

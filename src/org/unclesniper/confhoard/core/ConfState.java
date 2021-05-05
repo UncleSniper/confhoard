@@ -199,11 +199,20 @@ public class ConfState implements ConfStateBinding {
 			List<SlotListener> fired = new LinkedList<SlotListener>();
 			SlotListener.SlotUpdatedEvent event = new SlotListener.SlotUpdatedEvent(slot, credentials,
 					innerState, oldFragment, newFragment, parameters);
-			boolean setFragmentTook = false;
+			boolean setFragmentTook = false, assignFragmentAhead = slot.isAssignFragmentAhead();
+			boolean ignoreOldFragmentOnSave = slot.isIgnoreOldFragmentOnSave();
 			try {
+				if(assignFragmentAhead) {
+					slot.setFragment(newFragment);
+					slot.fireFragmentUpdated(credentials, innerState, parameters,
+							ignoreOldFragmentOnSave ? oldFragment : null);
+				}
 				slot.fireSlotUpdated(event, fired::add);
-				slot.setFragment(newFragment);
-				slot.fireFragmentUpdated(credentials, innerState, parameters);
+				if(!assignFragmentAhead) {
+					slot.setFragment(newFragment);
+					slot.fireFragmentUpdated(credentials, innerState, parameters,
+							ignoreOldFragmentOnSave ? oldFragment : null);
+				}
 				setFragmentTook = true;
 			}
 			catch(RuntimeException | IOException | ConfHoardException e) {
@@ -236,7 +245,7 @@ public class ConfState implements ConfStateBinding {
 			try {
 				for(SlotListener listener : fired)
 					listener.slotUpdated(rollbackEvent);
-				slot.fireFragmentUpdated(credentials, state, event::getRequestParameter);
+				slot.fireFragmentUpdated(credentials, state, event::getRequestParameter, null);
 			}
 			catch(RuntimeException | IOException | ConfHoardException e) {
 				return throwSlotUpdateFailed(slot, rollbackEvent, e, true);
@@ -244,7 +253,7 @@ public class ConfState implements ConfStateBinding {
 		}
 		else {
 			try {
-				slot.fireFragmentUpdated(credentials, state, event::getRequestParameter);
+				slot.fireFragmentUpdated(credentials, state, event::getRequestParameter, null);
 			}
 			catch(RuntimeException | IOException e) {
 				cause = e;

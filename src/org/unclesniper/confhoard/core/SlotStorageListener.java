@@ -6,7 +6,7 @@ import org.unclesniper.confhoard.core.security.Credentials;
 
 public interface SlotStorageListener {
 
-	void saveSlot(Credentials credentials, ConfStateBinding state, Function<String, Object> parameters)
-			throws IOException;
+	void saveSlot(Credentials credentials, ConfStateBinding state, Function<String, Object> parameters,
+			Fragment ignore) throws IOException;
 
 }

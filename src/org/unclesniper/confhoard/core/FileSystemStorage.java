@@ -119,7 +119,7 @@ public class FileSystemStorage extends AbstractStorage {
 					state.removeFragment(this);
 				if(slot.getFragment() == this)
 					slot.setFragment(null);
-				saveIndex(credentials, confState, parameters);
+				saveIndex(credentials, confState, parameters, null);
 			}
 		}
 
@@ -167,9 +167,9 @@ public class FileSystemStorage extends AbstractStorage {
 		public FSSlotStorageListener() {}
 
 		@Override
-		public void saveSlot(Credentials credentials, ConfStateBinding state, Function<String, Object> parameters)
-				throws IOException {
-			saveIndex(credentials, state, parameters);
+		public void saveSlot(Credentials credentials, ConfStateBinding state, Function<String, Object> parameters,
+				Fragment ignore) throws IOException {
+			saveIndex(credentials, state, parameters, ignore);
 		}
 
 	}
@@ -414,13 +414,13 @@ public class FileSystemStorage extends AbstractStorage {
 			FSFragment fragment = new FSFragment(slot, nextFragmentID, hashAlgorithm, hashBuffer);
 			state.addFragment(fragment);
 			++nextFragmentID;
-			saveIndex(credentials, confState, parameters);
+			saveIndex(credentials, confState, parameters, null);
 			return fragment;
 		}
 	}
 
-	private void saveIndex(Credentials credentials, ConfStateBinding confState, Function<String, Object> parameters)
-			throws IOException {
+	private void saveIndex(Credentials credentials, ConfStateBinding confState, Function<String, Object> parameters,
+			Fragment ignore) throws IOException {
 		synchronized(getLocalLock()) {
 			File newFile = new File(directory, "index.new");
 			try(FileOutputStream fos = new FileOutputStream(newFile)) {
@@ -433,7 +433,14 @@ public class FileSystemStorage extends AbstractStorage {
 					dos.writeUTF(slot.getKey());
 					FSFragment active = state.internFragment(slot.getFragment());
 					Set<FSFragment> all = state.getFragments();
-					dos.writeInt(all.size() + (active != null && all.contains(active) ? 0 : 1));
+					int fragmentCount = all.size();
+					if(active == ignore)
+						active = null;
+					if(all.contains(ignore))
+						--fragmentCount;
+					if(active == null || !all.contains(active))
+						++fragmentCount;
+					dos.writeInt(fragmentCount);
 					dos.writeLong(active == null ? -1L : active.getID());
 					byte[] activeHash = active == null ? null : active.getHash(currentHashAlgorithm, credentials,
 							confState, parameters);
@@ -441,7 +448,7 @@ public class FileSystemStorage extends AbstractStorage {
 					if(activeHash != null)
 						dos.write(activeHash);
 					for(FSFragment fragment : all) {
-						if(fragment == active)
+						if(fragment == active || fragment == ignore)
 							continue;
 						dos.writeLong(fragment.getID());
 						byte[] hash = fragment.getHash(currentHashAlgorithm, credentials, confState, parameters);
