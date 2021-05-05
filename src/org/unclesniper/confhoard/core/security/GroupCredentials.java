@@ -1,10 +1,14 @@
 package org.unclesniper.confhoard.core.security;
 
-import org.unclesniper.confhoard.core.util.SingleElementIterator;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Collections;
 
-public class GroupCredentials implements GroupBearingCredentials {
+public class GroupCredentials extends AbstractMultiGroupBearingCredentials {
 
 	private final String groupName;
+
+	private final Set<GroupBearingCredentials> subgroups = new HashSet<GroupBearingCredentials>();
 
 	public GroupCredentials(String groupName) {
 		if(groupName == null)
@@ -16,27 +20,38 @@ public class GroupCredentials implements GroupBearingCredentials {
 		return groupName;
 	}
 
-	@Override
-	public Iterable<String> getGroupNames() {
-		return () -> new SingleElementIterator<String>(groupName);
+	public Set<GroupBearingCredentials> getSubgroups() {
+		return Collections.unmodifiableSet(subgroups);
+	}
+
+	public void addSubgroup(GroupBearingCredentials subgroup) {
+		if(subgroup == null)
+			throw new IllegalArgumentException("Subgroup cannot be null");
+		subgroups.add(subgroup);
 	}
 
 	@Override
-	public boolean hasGroup(GroupBearingCredentials group) {
-		if(group == null)
-			throw new IllegalArgumentException("Group cannot be null");
-		for(String gn : group.getGroupNames()) {
-			if(!groupName.equals(gn))
-				return false;
+	protected Set<String> generateGroupNames() {
+		Set<String> names = new HashSet<String>();
+		names.add(groupName);
+		for(GroupBearingCredentials group : subgroups) {
+			for(String gn : group.getGroupNames()) {
+				if(gn != null)
+					names.add(gn);
+			}
 		}
-		return true;
+		return names;
 	}
 
 	@Override
-	public boolean hasGroup(String group) {
-		if(group == null)
-			throw new IllegalArgumentException("Group name cannot be null");
-		return groupName.equals(group);
+	protected boolean hasGroupUncached(String groupName) {
+		if(this.groupName.equals(groupName))
+			return true;
+		for(GroupBearingCredentials group : subgroups) {
+			if(group.hasGroup(groupName))
+				return true;
+		}
+		return false;
 	}
 
 	@Override
