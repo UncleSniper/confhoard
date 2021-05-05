@@ -37,13 +37,9 @@ public class GroupSlotSecurityConstraint extends AbstractSlotSecurityConstraint 
 			return false;
 		GroupBearingCredentials gbc = (GroupBearingCredentials)credentials;
 		synchronized(groups) {
-			for(GroupBearingCredentials theirGroup : gbc.getGroups()) {
-				if(theirGroup == null)
-					continue;
-				for(GroupBearingCredentials myGroup : groups) {
-					if(myGroup != null && myGroup.hasGroup(theirGroup))
-						return true;
-				}
+			for(GroupBearingCredentials myGroup : groups) {
+				if(gbc.hasGroup(myGroup))
+					return true;
 			}
 		}
 		return false;

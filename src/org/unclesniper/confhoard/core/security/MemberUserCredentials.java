@@ -5,12 +5,11 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Collections;
 
-public class MemberUserCredentials
-		implements UserBearingCredentials, GroupBearingCredentials, Iterable<GroupCredentials> {
+public class MemberUserCredentials extends AbstractMultiGroupBearingCredentials implements UserBearingCredentials {
 
 	private final UserCredentials user;
 
-	private final Set<GroupCredentials> groups = new HashSet<GroupCredentials>();
+	private final Set<GroupBearingCredentials> groups = new HashSet<GroupBearingCredentials>();
 
 	public MemberUserCredentials(UserCredentials user) {
 		if(user == null)
@@ -26,7 +25,11 @@ public class MemberUserCredentials
 		return user;
 	}
 
-	public void addGroup(GroupCredentials group) {
+	public Set<GroupBearingCredentials> getGroups() {
+		return Collections.unmodifiableSet(groups);
+	}
+
+	public void addGroup(GroupBearingCredentials group) {
 		if(group == null)
 			throw new IllegalArgumentException("Group cannot be null");
 		groups.add(group);
@@ -38,30 +41,21 @@ public class MemberUserCredentials
 	}
 
 	@Override
-	public Set<GroupCredentials> getGroups() {
-		return groups;
-	}
-
-	@Override
-	public boolean hasGroup(Credentials group) {
-		if(group == null)
-			throw new IllegalArgumentException("Group cannot be null");
-		if(!(group instanceof GroupBearingCredentials))
-			return false;
-		GroupBearingCredentials gbc = (GroupBearingCredentials)group;
-		for(GroupCredentials gc : gbc.getGroups()) {
-			if(!groups.contains(gc))
-				return false;
+	protected Set<String> generateGroupNames() {
+		Set<String> names = new HashSet<String>();
+		for(GroupBearingCredentials group : groups) {
+			for(String gn : group.getGroupNames()) {
+				if(gn != null)
+					names.add(gn);
+			}
 		}
-		return true;
+		return names;
 	}
 
 	@Override
-	public boolean hasGroup(String group) {
-		if(group == null)
-			throw new IllegalArgumentException("Group name cannot be null");
-		for(GroupCredentials myGroup : groups) {
-			if(myGroup.getGroupName().equals(group))
+	protected boolean hasGroupUncached(String groupName) {
+		for(GroupBearingCredentials group : groups) {
+			if(group.hasGroup(groupName))
 				return true;
 		}
 		return false;
@@ -83,11 +77,6 @@ public class MemberUserCredentials
 	@Override
 	public String toString() {
 		return user.toString();
-	}
-
-	@Override
-	public Iterator<GroupCredentials> iterator() {
-		return Collections.unmodifiableSet(groups).iterator();
 	}
 
 }

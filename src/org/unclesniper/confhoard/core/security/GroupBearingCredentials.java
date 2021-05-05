@@ -2,9 +2,9 @@ package org.unclesniper.confhoard.core.security;
 
 public interface GroupBearingCredentials extends Credentials {
 
-	Iterable<GroupCredentials> getGroups();
+	Iterable<String> getGroupNames();
 
-	boolean hasGroup(Credentials group);
+	boolean hasGroup(GroupBearingCredentials group);
 
 	boolean hasGroup(String group);
 

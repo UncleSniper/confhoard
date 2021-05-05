@@ -1,9 +1,8 @@
 package org.unclesniper.confhoard.core.security;
 
-import java.util.Iterator;
 import org.unclesniper.confhoard.core.util.SingleElementIterator;
 
-public class GroupCredentials implements GroupBearingCredentials, Iterable<GroupCredentials> {
+public class GroupCredentials implements GroupBearingCredentials {
 
 	private final String groupName;
 
@@ -18,19 +17,16 @@ public class GroupCredentials implements GroupBearingCredentials, Iterable<Group
 	}
 
 	@Override
-	public Iterable<GroupCredentials> getGroups() {
-		return this;
+	public Iterable<String> getGroupNames() {
+		return () -> new SingleElementIterator<String>(groupName);
 	}
 
 	@Override
-	public boolean hasGroup(Credentials group) {
+	public boolean hasGroup(GroupBearingCredentials group) {
 		if(group == null)
 			throw new IllegalArgumentException("Group cannot be null");
-		if(!(group instanceof GroupBearingCredentials))
-			return false;
-		GroupBearingCredentials gbc = (GroupBearingCredentials)group;
-		for(GroupCredentials gc : gbc.getGroups()) {
-			if(!groupName.equals(gc.groupName))
+		for(String gn : group.getGroupNames()) {
+			if(!groupName.equals(gn))
 				return false;
 		}
 		return true;
@@ -59,11 +55,6 @@ public class GroupCredentials implements GroupBearingCredentials, Iterable<Group
 	@Override
 	public String toString() {
 		return "group '" + groupName + '\'';
-	}
-
-	@Override
-	public Iterator<GroupCredentials> iterator() {
-		return new SingleElementIterator<GroupCredentials>(this);
 	}
 
 }
