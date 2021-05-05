@@ -18,6 +18,10 @@ public class MemberUserCredentials
 		this.user = user;
 	}
 
+	public MemberUserCredentials(String username) {
+		user = new UserCredentials(username);
+	}
+
 	public UserCredentials getUser() {
 		return user;
 	}
