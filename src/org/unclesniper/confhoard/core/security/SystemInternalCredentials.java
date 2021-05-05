@@ -4,4 +4,6 @@ public class SystemInternalCredentials implements EverythingIsAllowedCredentials
 
 	public static final EverythingIsAllowedCredentials instance = new SystemInternalCredentials();
 
+	public SystemInternalCredentials() {}
+
 }
