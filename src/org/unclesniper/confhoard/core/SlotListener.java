@@ -37,6 +37,8 @@ public interface SlotListener {
 
 		public abstract Credentials getCredentials();
 
+		public abstract void propagate(SlotListener listener) throws IOException, ConfHoardException;
+
 	}
 
 	public class SlotLoadedEvent extends SlotEvent {
@@ -48,6 +50,13 @@ public interface SlotListener {
 		@Override
 		public Credentials getCredentials() {
 			return SystemInternalCredentials.instance;
+		}
+
+		@Override
+		public void propagate(SlotListener listener) throws IOException, ConfHoardException {
+			if(listener == null)
+				throw new IllegalArgumentException("Slot listener cannot be null");
+			listener.slotLoaded(this);
 		}
 
 	}
@@ -105,6 +114,13 @@ public interface SlotListener {
 		@Override
 		public Credentials getCredentials() {
 			return credentials;
+		}
+
+		@Override
+		public void propagate(SlotListener listener) throws IOException, ConfHoardException {
+			if(listener == null)
+				throw new IllegalArgumentException("Slot listener cannot be null");
+			listener.slotUpdated(this);
 		}
 
 	}
